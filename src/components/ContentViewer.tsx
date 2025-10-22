@@ -12,6 +12,7 @@ function ContentViewer({ epubData }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bookRef = useRef<Book | null>(null)
   const renditionRef = useRef<Rendition | null>(null)
+  const isRenditionReadyRef = useRef<boolean>(false)
 
   const { setBook, setRendition, setCurrentLocation, setTotalLocations, setPercentage, setMetadataTitle } = useBookStore()
 
@@ -64,6 +65,7 @@ function ContentViewer({ epubData }: Props) {
 
       rendition.display().then(() => {
         console.log('ContentViewer: 内容显示成功')
+        isRenditionReadyRef.current = true
       }).catch((err) => {
         console.error('ContentViewer: 显示内容失败', err)
       })
@@ -94,9 +96,14 @@ function ContentViewer({ epubData }: Props) {
         // 添加防抖，避免频繁调用
         clearTimeout(resizeTimeout)
         resizeTimeout = setTimeout(() => {
-          if (renditionRef.current) {
+          // 只在 rendition 准备好后才调用 resize
+          if (isRenditionReadyRef.current && renditionRef.current && typeof renditionRef.current.resize === 'function') {
             console.log('ContentViewer: 容器大小变化，重新调整渲染')
-            renditionRef.current.resize()
+            try {
+              renditionRef.current.resize()
+            } catch (err) {
+              console.error('ContentViewer: resize 调用失败', err)
+            }
           }
         }, 100)
       })
@@ -108,6 +115,7 @@ function ContentViewer({ epubData }: Props) {
       return () => {
         clearTimeout(resizeTimeout)
         resizeObserver.disconnect()
+        isRenditionReadyRef.current = false
         rendition.destroy()
         setBook(null)
         setRendition(null)

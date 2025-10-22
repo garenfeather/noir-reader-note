@@ -64,6 +64,7 @@ class DatabaseService {
         is_empty BOOLEAN DEFAULT 0,
         parent_segment_id TEXT,
         preview TEXT,
+        text_length INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )
@@ -205,8 +206,8 @@ class DatabaseService {
   saveSegments(projectId, segments) {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
-      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     // 使用事务确保数据一致性
@@ -222,7 +223,8 @@ class DatabaseService {
           segment.position,
           segment.isEmpty ? 1 : 0,
           segment.parentSegmentId || null,
-          segment.preview || null
+          segment.preview || null,
+          segment.textLength || 0
         )
       }
     })
@@ -244,7 +246,7 @@ class DatabaseService {
   loadSegments(projectId, chapterId) {
     const stmt = this.db.prepare(`
       SELECT id, project_id, chapter_id, chapter_href, xpath, cfi_range, position,
-             is_empty, parent_segment_id, preview, created_at
+             is_empty, parent_segment_id, preview, text_length, created_at
       FROM segments
       WHERE project_id = ? AND chapter_id = ?
       ORDER BY position ASC
@@ -264,6 +266,7 @@ class DatabaseService {
         isEmpty: row.is_empty === 1,
         parentSegmentId: row.parent_segment_id,
         preview: row.preview,
+        textLength: row.text_length,
         createdAt: row.created_at
       }))
     } catch (error) {

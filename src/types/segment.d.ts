@@ -13,6 +13,7 @@ export interface Segment {
   isEmpty: boolean              // 是否为空段落
   parentSegmentId?: string      // 手动分割的父分段ID
   preview?: string              // 预览文字（列表显示用）
+  textLength?: number           // 完整文本的字符数
   createdAt?: string            // 创建时间
 }
 

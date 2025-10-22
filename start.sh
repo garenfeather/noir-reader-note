@@ -1,72 +1,116 @@
 #!/bin/bash
 
-#####################################################################
-# ReadTranslate 服务启动脚本
-#
-# 用法:
-#   bash start.sh              # 简单启动（使用 dev.sh）
-#   bash start.sh --full       # 完整启动（使用 restart-services.sh）
-#   bash start.sh --help       # 显示帮助信息
-#
-#####################################################################
+#######################################
+# ReadTranslate 完整启动脚本
+# 功能：重启全部服务，自动处理端口占用
+#######################################
+
+set -e
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VITE_PORT=5173
+LOG_FILE="/tmp/read-translate.log"
 
-# 颜色
-RED='\033[0;31m'
-GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
 NC='\033[0m'
 
-show_help() {
-  cat << EOF
-${BLUE}=====================================
-ReadTranslate 服务启动脚本
-=====================================${NC}
+echo -e "${YELLOW}========================================${NC}"
+echo -e "${YELLOW}ReadTranslate 完整启动脚本${NC}"
+echo -e "${YELLOW}========================================${NC}\n"
 
-用法:
-  ${GREEN}bash start.sh${NC}              快速启动（推荐日常使用）
-  ${GREEN}bash start.sh --full${NC}       完整启动（完整清理和诊断）
-  ${GREEN}bash start.sh --help${NC}       显示此帮助信息
+echo -e "${YELLOW}[1/4] 停止现有服务...${NC}"
+pids=$(pgrep -f "npm run electron:dev|concurrently|vite|wait-on http://localhost" 2>/dev/null || true)
+if [ -n "$pids" ]; then
+  echo "$pids" | xargs kill -9 2>/dev/null || true
+  echo -e "${GREEN}✓ 已停止现有进程${NC}"
+fi
+lsof -i :${VITE_PORT} 2>/dev/null | grep -v COMMAND | awk '{print $2}' | xargs kill -9 2>/dev/null || true
+echo -e "${GREEN}✓ 已释放端口 ${VITE_PORT}${NC}"
+sleep 2
 
-快速启动 (dev.sh):
-  ✓ 杀死旧进程
-  ✓ 启动 Vite 开发服务
-  ✓ 启动 Electron 应用
-  ✓ 速度快（~5秒）
+echo -e "\n${YELLOW}[2/4] 验证开发环境...${NC}"
+if ! command -v node >/dev/null 2>&1; then
+  echo -e "${RED}✗ Node.js 未安装${NC}"
+  exit 1
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo -e "${RED}✗ npm 未安装${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓ Node.js 版本: $(node -v)${NC}"
+echo -e "${GREEN}✓ npm 版本: $(npm -v)${NC}"
 
-完整启动 (restart-services.sh):
-  ✓ 杀死旧进程并释放端口
-  ✓ 验证开发环境
-  ✓ 启动所有服务
-  ✓ 诊断和日志
-  ✓ 更详细（~30秒）
+cd "${PROJECT_DIR}"
+if [ ! -f "package.json" ]; then
+  echo -e "${RED}✗ package.json 未找到${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓ 项目目录: ${PROJECT_DIR}${NC}"
 
-快捷命令:
-  ${YELLOW}tail -f /tmp/vite.log${NC}    查看 Vite 日志
-  ${YELLOW}tail -f /tmp/electron.log${NC} 查看 Electron 日志
-  ${YELLOW}pkill -9 -f 'npm run|electron|vite'${NC} 停止所有服务
+echo -e "\n${YELLOW}[3/4] 启动开发服务...${NC}"
+rm -f "${LOG_FILE}"
 
-${BLUE}=====================================
-${NC}
-EOF
-}
+echo "启动 Vite 开发服务..."
+nohup npm run dev > "${LOG_FILE}" 2>&1 &
+VITE_PID=$!
+sleep 3
 
-# 检查参数
-case "${1:-}" in
-  --help)
-    show_help
-    exit 0
-    ;;
-  --full)
-    echo -e "${YELLOW}使用完整启动模式...${NC}\n"
-    bash "${PROJECT_DIR}/restart-services.sh"
-    exit $?
-    ;;
-  *)
-    echo -e "${YELLOW}使用快速启动模式...${NC}\n"
-    bash "${PROJECT_DIR}/dev.sh"
-    exit $?
-    ;;
-esac
+echo "启动 Electron 应用..."
+nohup npx electron . >> "${LOG_FILE}" 2>&1 &
+ELECTRON_PID=$!
+
+echo -e "${GREEN}✓ Vite 进程 (PID: ${VITE_PID})${NC}"
+echo -e "${GREEN}✓ Electron 进程 (PID: ${ELECTRON_PID})${NC}"
+
+echo -e "\n${YELLOW}[4/4] 等待服务就绪...${NC}"
+TIMEOUT=30
+ELAPSED=0
+VITE_READY=false
+ELECTRON_READY=false
+
+while [ $ELAPSED -lt $TIMEOUT ]; do
+  if lsof -i :${VITE_PORT} 2>/dev/null | grep -q LISTEN; then
+    if [ "$VITE_READY" != true ]; then
+      echo -e "${GREEN}✓ Vite 开发服务已启动 (http://localhost:${VITE_PORT})${NC}"
+    fi
+    VITE_READY=true
+  fi
+
+  if pgrep -f "Electron" >/dev/null 2>&1; then
+    if [ "$ELECTRON_READY" != true ]; then
+      echo -e "${GREEN}✓ Electron 应用已启动${NC}"
+    fi
+    ELECTRON_READY=true
+  fi
+
+  if [ "$VITE_READY" = true ] && [ "$ELECTRON_READY" = true ]; then
+    break
+  fi
+
+  sleep 1
+  ELAPSED=$((ELAPSED + 1))
+done
+
+echo ""
+
+if [ "$VITE_READY" = true ]; then
+  echo -e "${GREEN}✓ 所有服务启动完成！${NC}"
+  echo -e "${GREEN}✓ 开发日志: ${LOG_FILE}${NC}"
+else
+  echo -e "${RED}✗ 服务启动超时或失败${NC}"
+  echo -e "${YELLOW}请检查日志:${NC}"
+  tail -20 "${LOG_FILE}"
+  exit 1
+fi
+
+echo -e "\n${YELLOW}========================================${NC}"
+echo -e "${GREEN}ReadTranslate 已准备就绪！${NC}"
+echo -e "${YELLOW}========================================${NC}"
+echo ""
+echo "提示："
+echo "  - 实时日志: tail -f ${LOG_FILE}"
+echo "  - 停止服务: pkill -f 'npm run electron:dev'"
+echo "  - 重新启动: bash start.sh"
+echo ""

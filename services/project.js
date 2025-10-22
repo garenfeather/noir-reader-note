@@ -35,14 +35,21 @@ class ProjectService {
   /**
    * 生成项目ID（基于标题和MD5）
    */
-  generateProjectId(epubData, metadata) {
+  generateProjectId(epubData, metadata, epubPath = '') {
     // 计算文件MD5
     const hash = crypto.createHash('md5')
     hash.update(epubData)
     const md5 = hash.digest('hex').substring(0, 8) // 取前8位
 
-    // 使用元数据标题或文件名
-    const title = metadata?.title?.trim() || 'untitled'
+    // 标题逻辑与左上角显示一致：优先元数据title，再用文件名，最后默认untitled
+    let title = metadata?.title?.trim() || ''
+    if (!title && epubPath) {
+      title = path.basename(epubPath, '.epub').trim()
+    }
+    if (!title) {
+      title = 'untitled'
+    }
+
     // 清理标题，移除特殊字符
     const cleanTitle = title.replace(/[/\\?%*:|"<>]/g, '-').substring(0, 50)
 
@@ -74,7 +81,7 @@ class ProjectService {
   async createProject(epubPath, epubData, metadata = null, forceCreate = false) {
     try {
       // 1. 生成项目ID
-      const projectId = this.generateProjectId(epubData, metadata)
+      const projectId = this.generateProjectId(epubData, metadata, epubPath)
 
       // 2. 检查项目是否已存在
       const checkResult = this.checkProjectExists(projectId)

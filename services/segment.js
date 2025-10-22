@@ -59,7 +59,7 @@ class SegmentService {
       // 提取段落
       const paragraphs = this.extractParagraphs(body)
 
-      // 生成分段数据，包含preview
+      // 生成分段数据，包含preview和textLength
       const segments = paragraphs.map((para, index) => {
         const segment = {
           id: uuidv4(),
@@ -71,7 +71,8 @@ class SegmentService {
           position: index,
           isEmpty: para.isEmpty,
           parentSegmentId: null,
-          preview: this.generatePreview(para.text)  // 新增preview
+          preview: this.generatePreview(para.text),  // 预览文字
+          textLength: para.text.length  // 完整文本的字符数
         }
 
         return segment

@@ -28,12 +28,12 @@ function ProjectList({ onSelectProject }: Props) {
 
   const formatUpdatedAt = (updatedAt?: string | null) => {
     if (!updatedAt) {
-      return '最后修改时间未知'
+      return '时间未知'
     }
 
     const date = new Date(updatedAt)
     if (Number.isNaN(date.getTime())) {
-      return '最后修改时间未知'
+      return '时间未知'
     }
 
     return date.toLocaleString()
@@ -143,7 +143,7 @@ function ProjectList({ onSelectProject }: Props) {
                 title={<div className="truncate">{getDisplayTitle(project)}</div>}
                 description={
                   <div className="text-xs text-gray-500 truncate">
-                    最后修改：{formatUpdatedAt(project.updatedAt)}
+                    {formatUpdatedAt(project.updatedAt)}
                   </div>
                 }
               />

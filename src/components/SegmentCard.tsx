@@ -34,9 +34,9 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
           <span className="text-xs text-gray-500 font-medium">
             段落 {index + 1}
           </span>
-          {segment.preview && (
+          {segment.textLength !== undefined && (
             <span className="text-xs text-gray-400">
-              {segment.preview.replace(/\.\.\.$/, '').length} 字符
+              {segment.textLength} 字符
             </span>
           )}
         </div>
