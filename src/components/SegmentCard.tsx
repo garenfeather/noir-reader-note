@@ -27,7 +27,7 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
-      bodyStyle={{ padding: '8px 12px' }}
+      styles={{ body: { padding: '8px 12px' } }}
     >
       <div className="flex flex-col gap-1" style={{ minHeight: '2.5rem' }}>
         <div className="flex items-center justify-between">
