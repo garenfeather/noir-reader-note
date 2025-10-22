@@ -12,18 +12,12 @@ export interface ElectronAPI {
     metadata?: any
   ) => Promise<{ success: boolean; data?: ProjectInfo; error?: string }>
 
-  getProject: (
-    projectId: string
-  ) => Promise<{ success: boolean; data?: ProjectInfo; error?: string }>
-
-  getAllProjects: () =>
-    Promise<{ success: boolean; data?: Project[]; error?: string }>
-
   getProjectsFromDisk: () =>
     Promise<{ success: boolean; data?: Project[]; error?: string }>
 
   deleteProject: (projectId: string) =>
     Promise<{ success: boolean; error?: string }>
+
   openProject: (
     projectId: string
   ) => Promise<{ success: boolean; data?: { projectInfo: ProjectInfo; epubData: number[] }; error?: string }>

@@ -25,20 +25,6 @@ export interface SegmentParseResult {
   emptyCount: number            // 空段落数
 }
 
-export interface SegmentSplitRequest {
-  segmentId: string             // 要分割的分段ID
-  splitRange: {
-    startOffset: number         // 分割起始位置
-    endOffset: number           // 分割结束位置
-  }
-  selectedText: string          // 选中的文本
-}
-
-export interface SegmentHighlight {
-  segmentId: string
-  cfiRange: string
-}
-
 /**
  * 段落元素信息（用于解析）
  */

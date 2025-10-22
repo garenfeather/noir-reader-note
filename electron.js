@@ -129,27 +129,6 @@ ipcMain.handle('project:delete', async (event, projectId) => {
 })
 
 // IPC 处理：获取项目信息
-ipcMain.handle('project:get', async (event, projectId) => {
-  try {
-    const projectInfo = projectService.getProject(projectId)
-    return { success: true, data: projectInfo }
-  } catch (error) {
-    console.error('IPC获取项目失败:', error)
-    return { success: false, error: error.message }
-  }
-})
-
-// IPC 处理：获取所有项目列表（从数据库）
-ipcMain.handle('project:getAll', async (event) => {
-  try {
-    const projects = dbService.getAllProjects()
-    return { success: true, data: projects }
-  } catch (error) {
-    console.error('IPC获取项目列表失败:', error)
-    return { success: false, error: error.message }
-  }
-})
-
 // IPC 处理：获取项目列表（从文件系统）
 ipcMain.handle('project:listFromDisk', async (event) => {
   try {
@@ -219,7 +198,8 @@ ipcMain.handle('project:open', async (event, projectId) => {
       throw new Error('项目不存在')
     }
 
-    const fileBuffer = fs.readFileSync(projectInfo.originalEpubPath)
+    const originalEpubPath = path.join(projectInfo.project.projectPath, 'original.epub')
+    const fileBuffer = fs.readFileSync(originalEpubPath)
     const epubDataArray = Array.from(new Uint8Array(fileBuffer))
 
     return {
@@ -278,7 +258,8 @@ ipcMain.handle('segments:parse', async (event, projectId, chapterId, chapterHref
     }
 
     // 查找OPF文件以获取基础路径
-    const opfPath = projectService.findOPFFile(projectInfo.extractedPath)
+    const extractedPath = path.join(projectInfo.project.projectPath, 'extracted')
+    const opfPath = projectService.findOPFFile(extractedPath)
     if (!opfPath) {
       throw new Error('找不到OPF文件')
     }
@@ -326,7 +307,8 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
     }
 
     // 第二步：缓存未命中，从文件读取
-    const opfPath = projectService.findOPFFile(projectInfo.extractedPath)
+    const extractedPath = path.join(projectInfo.project.projectPath, 'extracted')
+    const opfPath = projectService.findOPFFile(extractedPath)
     if (!opfPath) {
       throw new Error('找不到OPF文件')
     }

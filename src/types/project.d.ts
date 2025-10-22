@@ -27,6 +27,4 @@ export interface ProjectCreateOptions {
 
 export interface ProjectInfo {
   project: Project
-  extractedPath: string         // 解压后的内容路径
-  originalEpubPath: string      // 复制的原始EPUB路径
 }

@@ -81,7 +81,7 @@ function MainLayout() {
         loadingMsg()
 
         // 自动创建项目
-        await createProjectForEpub(result.path, arrayBuffer)
+        await createProject(result.path, arrayBuffer)
       } else {
         // 用户取消选择文件
         loadingMsg()
@@ -93,29 +93,40 @@ function MainLayout() {
   }
 
   // 为打开的EPUB创建项目
-  const createProjectForEpub = async (path: string, data: ArrayBuffer) => {
+  const createProject = async (path?: string, data?: ArrayBuffer, forceCreate = false) => {
+    // 使用传入参数或全局状态
+    const epubPathToUse = path || epubPath
+    const epubDataToUse = data || epubData
+
+    if (!epubPathToUse || !epubDataToUse) {
+      message.error('请先打开EPUB文件')
+      return
+    }
+
     try {
       message.loading('正在创建项目...', 0)
 
-      // 等待 book 加载元数据
+      // 获取EPUB元数据
       const metadata = book?.loaded?.metadata
         ? await book.loaded.metadata
         : null
 
-      const epubDataArray = Array.from(new Uint8Array(data))
+      // 转换为数组格式
+      const epubDataArray = Array.from(new Uint8Array(epubDataToUse))
 
+      // 调用Main进程创建项目
       const result = await window.electronAPI.createProject(
-        path,
+        epubPathToUse,
         epubDataArray,
         metadata,
-        false // 不强制创建
+        forceCreate
       )
 
       message.destroy()
 
       if (result.success && result.data) {
-        if (result.data.exists) {
-          // 项目已存在，使用Modal询问
+        if (result.data.exists && !forceCreate) {
+          // 项目已存在，询问用户
           Modal.confirm({
             title: '项目已存在',
             content: '检测到已存在该EPUB的项目，是否加载已有项目？',
@@ -128,11 +139,11 @@ function MainLayout() {
             onCancel: async () => {
               // 删除旧项目并重新创建
               await window.electronAPI.deleteProject(result.data.project.id)
-              await createProjectForEpub(path, data)
+              await createProject(path, data, true)
             }
           })
         } else {
-          // 新项目
+          // 新项目或强制创建
           setCurrentProject(result.data)
           message.success('项目创建成功')
         }
@@ -192,7 +203,8 @@ function MainLayout() {
       // 设置新项目
       setCurrentProject(projectInfo)
       setEpubData(arrayBuffer)
-      setEpubPath(projectInfo.originalEpubPath)
+      const originalEpubPath = `${projectInfo.project.projectPath}/original.epub`
+      setEpubPath(originalEpubPath)
       setFileName(displayFileName)
       setMetadataTitle(titleFromMetadata)
 
@@ -245,67 +257,6 @@ function MainLayout() {
     }
   }
 
-  // 创建项目
-  const createProject = async (forceCreate = false) => {
-    if (!epubData || !epubPath) {
-      message.error('请先打开EPUB文件')
-      return
-    }
-
-    try {
-      message.loading('正在创建项目...', 0)
-
-      // 获取EPUB元数据
-      const metadata = book?.loaded?.metadata
-        ? await book.loaded.metadata
-        : null
-
-      // 转换为数组格式
-      const epubDataArray = Array.from(new Uint8Array(epubData))
-
-      // 调用Main进程创建项目
-      const result = await window.electronAPI.createProject(
-        epubPath,
-        epubDataArray,
-        metadata,
-        forceCreate
-      )
-
-      message.destroy()
-
-      if (result.success && result.data) {
-        // 检查项目是否已存在
-        if (result.data.exists && !forceCreate) {
-          const confirmed = confirm(
-            '检测到已存在该EPUB的项目，是否加载已有项目？\n' +
-            '点击"确定"加载已有项目\n' +
-            '点击"取消"删除旧项目并创建新项目'
-          )
-
-          if (confirmed) {
-            // 加载已有项目
-            setCurrentProject(result.data)
-            message.success('已加载现有项目')
-            console.log('加载现有项目:', result.data.project.id)
-          } else {
-            // 删除旧项目并重新创建
-            await createProject(true)
-          }
-        } else {
-          // 新创建的项目
-          setCurrentProject(result.data)
-          message.success('项目创建成功')
-          console.log('项目创建成功:', result.data.project.id)
-        }
-      } else {
-        message.error('创建项目失败: ' + result.error)
-      }
-    } catch (error) {
-      message.destroy()
-      console.error('创建项目失败:', error)
-      message.error('创建项目失败')
-    }
-  }
 
   // 删除当前项目
   const deleteCurrentProject = async () => {

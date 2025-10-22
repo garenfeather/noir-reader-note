@@ -8,7 +8,6 @@ import { Project, ProjectInfo } from '../types/project'
 interface ProjectState {
   // 当前项目信息
   currentProject: Project | null
-  projectInfo: ProjectInfo | null
 
   // 是否有未保存的修改
   hasUnsavedChanges: boolean
@@ -21,13 +20,11 @@ interface ProjectState {
 
 export const useProjectStore = create<ProjectState>((set) => ({
   currentProject: null,
-  projectInfo: null,
   hasUnsavedChanges: false,
 
   setCurrentProject: (projectInfo) =>
     set({
-      currentProject: projectInfo?.project || null,
-      projectInfo: projectInfo
+      currentProject: projectInfo?.project || null
     }),
 
   setHasUnsavedChanges: (has) =>
@@ -36,7 +33,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
   clearProject: () =>
     set({
       currentProject: null,
-      projectInfo: null,
       hasUnsavedChanges: false
     })
 }))
