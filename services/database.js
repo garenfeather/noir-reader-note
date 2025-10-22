@@ -63,6 +63,7 @@ class DatabaseService {
         position INTEGER NOT NULL,
         is_empty BOOLEAN DEFAULT 0,
         parent_segment_id TEXT,
+        preview TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )
