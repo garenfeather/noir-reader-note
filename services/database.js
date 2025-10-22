@@ -204,8 +204,8 @@ class DatabaseService {
   saveSegments(projectId, segments) {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
-      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     // 使用事务确保数据一致性
@@ -220,7 +220,8 @@ class DatabaseService {
           segment.cfiRange || null,
           segment.position,
           segment.isEmpty ? 1 : 0,
-          segment.parentSegmentId || null
+          segment.parentSegmentId || null,
+          segment.preview || null
         )
       }
     })
@@ -241,7 +242,9 @@ class DatabaseService {
    */
   loadSegments(projectId, chapterId) {
     const stmt = this.db.prepare(`
-      SELECT * FROM segments
+      SELECT id, project_id, chapter_id, chapter_href, xpath, cfi_range, position,
+             is_empty, parent_segment_id, preview, created_at
+      FROM segments
       WHERE project_id = ? AND chapter_id = ?
       ORDER BY position ASC
     `)
@@ -259,6 +262,7 @@ class DatabaseService {
         position: row.position,
         isEmpty: row.is_empty === 1,
         parentSegmentId: row.parent_segment_id,
+        preview: row.preview,
         createdAt: row.created_at
       }))
     } catch (error) {

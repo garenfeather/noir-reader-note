@@ -18,6 +18,19 @@ const PARAGRAPH_TAGS = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'b
 
 class SegmentService {
   /**
+   * 生成一行预览文字
+   * @param {string} text - 原文本
+   * @param {number} maxLength - 最大字符数（根据UI显示效果调整）
+   */
+  generatePreview(text, maxLength = 50) {
+    if (!text) return ''
+    const trimmed = text.trim()
+    return trimmed.length > maxLength
+      ? trimmed.substring(0, maxLength) + '...'
+      : trimmed
+  }
+
+  /**
    * 解析xhtml文件，提取段落
    * @param {string} xhtmlPath - xhtml文件路径
    * @param {string} chapterId - 章节ID
@@ -46,8 +59,7 @@ class SegmentService {
       // 提取段落
       const paragraphs = this.extractParagraphs(body)
 
-      // 生成分段数据
-      // 注意：分段文本不存储在此，而是在显示时通过xpath从XHTML动态读取
+      // 生成分段数据，包含preview
       const segments = paragraphs.map((para, index) => {
         const segment = {
           id: uuidv4(),
@@ -58,7 +70,8 @@ class SegmentService {
           cfiRange: null,  // CFI将在渲染进程中生成
           position: index,
           isEmpty: para.isEmpty,
-          parentSegmentId: null
+          parentSegmentId: null,
+          preview: this.generatePreview(para.text)  // 新增preview
         }
 
         return segment

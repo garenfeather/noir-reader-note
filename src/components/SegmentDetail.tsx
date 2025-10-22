@@ -1,9 +1,9 @@
 /**
  * 段落详情组件
- * 显示段落的完整信息（通过xpath从XHTML动态读取内容）
+ * 显示段落的完整信息（第一次点击时从XHTML读取并缓存）
  */
 
-import { Button } from 'antd'
+import { Button, Spin } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Segment } from '../types/segment'
@@ -17,13 +17,17 @@ interface Props {
 
 function SegmentDetail({ segment, index, onBack }: Props) {
   const [text, setText] = useState<string>('')
+  const [isLoading, setIsLoading] = useState(false)
   const { currentProject } = useProjectStore()
 
   useEffect(() => {
     // 从 XHTML 中读取分段文本
     const loadText = async () => {
       try {
-        console.log('SegmentDetail: 开始加载文本', { projectId: currentProject?.id, xpath: segment.xpath })
+        console.log('SegmentDetail: 开始加载文本', {
+          projectId: currentProject?.id,
+          xpath: segment.xpath
+        })
 
         if (!currentProject) {
           console.warn('SegmentDetail: 项目未初始化')
@@ -35,22 +39,28 @@ function SegmentDetail({ segment, index, onBack }: Props) {
           return
         }
 
+        setIsLoading(true)
+
         const result = await window.electronAPI.getSegmentText(
           currentProject.id,
           segment.chapterHref,
           segment.xpath
         )
 
-        console.log('SegmentDetail: API 返回结果', result)
+        console.log('SegmentDetail: 文本已加载', {
+          length: result.data?.text.length,
+          fromCache: result.data?.fromCache
+        })
 
         if (result.success && result.data?.text) {
-          console.log('SegmentDetail: 文本已加载', { length: result.data.text.length })
           setText(result.data.text)
         } else {
           console.warn('SegmentDetail: 获取文本失败或为空', result)
         }
       } catch (error) {
         console.error('SegmentDetail: 加载分段文本异常', error)
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -68,6 +78,7 @@ function SegmentDetail({ segment, index, onBack }: Props) {
           size="small"
         />
         <h3 className="font-semibold">段落 {index + 1}</h3>
+        {isLoading && <Spin size="small" />}
       </div>
 
       {/* 段落详情内容 */}

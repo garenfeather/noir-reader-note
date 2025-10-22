@@ -4,6 +4,7 @@ const fs = require('fs')
 const dbService = require('./services/database')
 const projectService = require('./services/project')
 const segmentService = require('./services/segment')
+const cacheService = require('./services/cacheService')
 
 let mainWindow = null
 
@@ -116,6 +117,9 @@ ipcMain.handle('project:create', async (event, epubPath, epubDataArray, metadata
 // IPC 处理：删除项目
 ipcMain.handle('project:delete', async (event, projectId) => {
   try {
+    // 清除缓存
+    cacheService.closeProjectCache(projectId)
+
     projectService.deleteProject(projectId)
     return { success: true }
   } catch (error) {
@@ -290,6 +294,10 @@ ipcMain.handle('segments:parse', async (event, projectId, chapterId, chapterHref
     // 解析段落
     const result = segmentService.parseXhtml(xhtmlPath, chapterId, chapterHref, projectId)
 
+    // 清除该项目的缓存
+    cacheService.clearProjectCache(projectId)
+    console.log('分割时已清除项目缓存:', projectId)
+
     return { success: true, data: result }
   } catch (error) {
     console.error('IPC解析分段失败:', error)
@@ -307,8 +315,17 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
       throw new Error('项目不存在')
     }
 
-    console.log('IPC: 项目已找到', projectInfo.id)
+    // 初始化该项目的缓存数据库（如果未初始化）
+    cacheService.initializeProjectCache(projectInfo.projectPath, projectId)
 
+    // 第一步：尝试从缓存读取
+    const cachedText = cacheService.getSegmentTextFromCache(projectId, chapterHref, xpath)
+    if (cachedText) {
+      console.log('IPC: 从缓存返回文本', { length: cachedText.length })
+      return { success: true, data: { text: cachedText, fromCache: true } }
+    }
+
+    // 第二步：缓存未命中，从文件读取
     const opfPath = projectService.findOPFFile(projectInfo.extractedPath)
     if (!opfPath) {
       throw new Error('找不到OPF文件')
@@ -319,14 +336,17 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
     const opfDir = path.dirname(opfPath)
     const xhtmlPath = path.join(opfDir, chapterHref)
 
-    console.log('IPC: XHTML路径已构建', xhtmlPath)
+    console.log('IPC: 从文件读取文本', xhtmlPath)
 
     // 获取分段文本
     const text = segmentService.getSegmentTextByXPath(xhtmlPath, xpath)
 
     console.log('IPC: 分段文本已获取', { length: text.length })
 
-    return { success: true, data: { text } }
+    // 第三步：保存到缓存
+    cacheService.saveSegmentTextToCache(projectId, chapterHref, xpath, text)
+
+    return { success: true, data: { text, fromCache: false } }
   } catch (error) {
     console.error('IPC获取分段文本失败:', error)
     return { success: false, error: error.message }
