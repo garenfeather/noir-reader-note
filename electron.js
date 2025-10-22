@@ -316,7 +316,7 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
     }
 
     // 初始化该项目的缓存数据库（如果未初始化）
-    cacheService.initializeProjectCache(projectInfo.projectPath, projectId)
+    cacheService.initializeProjectCache(projectInfo.project.projectPath, projectId)
 
     // 第一步：尝试从缓存读取
     const cachedText = cacheService.getSegmentTextFromCache(projectId, chapterHref, xpath)
