@@ -7,7 +7,6 @@ const { JSDOM } = require('jsdom')
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const EpubCFI = require('epubcfi')
 
 // 使用 Node.js crypto 生成 UUID
 function uuidv4() {
