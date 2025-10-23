@@ -8,7 +8,6 @@ const path = require('path')
 const fs = require('fs')
 const { JSDOM } = require('jsdom')
 const segmentService = require('./segment')
-const projectService = require('./project')
 
 class DatabaseService {
   constructor() {
@@ -263,7 +262,8 @@ class DatabaseService {
         return
       }
 
-      const extractedPath = projectService.getExtractedPath(projectId)
+      // 构建解压路径: projectPath + '/extracted'
+      const extractedPath = path.join(project.projectPath, 'extracted')
 
       // 按章节分组
       const segmentsByChapter = segments.reduce((acc, segment) => {

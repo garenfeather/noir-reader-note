@@ -7,6 +7,7 @@ const { JSDOM } = require('jsdom')
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
+const EpubCFI = require('epubjs/lib/epubcfi')
 
 // 使用 Node.js crypto 生成 UUID
 function uuidv4() {
@@ -301,7 +302,7 @@ class SegmentService {
       // 选择元素的所有内容
       range.selectNodeContents(element)
 
-      // 使用 epubcfi 生成 CFI
+      // 使用 epubjs 自带的 EpubCFI 生成 CFI
       const cfi = new EpubCFI()
       const cfiRange = cfi.generateCfiFromRange(range, document)
 

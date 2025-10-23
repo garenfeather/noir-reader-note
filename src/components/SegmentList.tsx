@@ -5,17 +5,21 @@
 
 import { List, Spin, Empty, Button, Space } from 'antd'
 import { CheckOutlined, CloseOutlined, EditOutlined } from '@ant-design/icons'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useSegmentStore } from '../store/segmentStore'
 import { useBookStore } from '../store/bookStore'
 import SegmentCard from './SegmentCard'
 import SegmentDetail from './SegmentDetail'
 import {
   findElementInRendition,
-  addHighlight,
-  removeHighlight,
-  addFlashHighlight,
-  scrollToElement
+  applyHoverHighlightByCfi,
+  removeHighlightByCfi,
+  flashHighlightByCfi,
+  addDomHoverHighlight,
+  removeDomHoverHighlight,
+  addDomFlashHighlight,
+  scrollToElement,
+  setupStyleInjection
 } from '../utils/highlightHelper'
 
 interface Props {
@@ -39,40 +43,76 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
   } = useSegmentStore()
 
   const { rendition } = useBookStore()
+  const lastRenditionRef = useRef<typeof rendition>(null)
 
-  // 保存当前高亮的元素引用
-  const currentHighlightedElement = useRef<Element | null>(null)
+  // 记录当前悬停高亮的 CFI
+  const hoverHighlightCfi = useRef<string | null>(null)
+  // 记录当前高亮的 DOM 元素，用于兜底移除
+  const hoverHighlightElement = useRef<Element | null>(null)
+  // 记录当前闪烁高亮的清理函数
+  const flashHighlightCleanup = useRef<(() => void) | null>(null)
+
+  // 初始化样式注入：监听 rendition 变化，自动注入高亮样式
+  useEffect(() => {
+    if (rendition) {
+      setupStyleInjection(rendition)
+      lastRenditionRef.current = rendition
+    }
+  }, [rendition])
+
+  const removeHoverHighlights = useCallback(() => {
+    const targetRendition = rendition ?? lastRenditionRef.current
+
+    if (hoverHighlightCfi.current && targetRendition) {
+      removeHighlightByCfi(targetRendition, hoverHighlightCfi.current)
+      hoverHighlightCfi.current = null
+    }
+
+    if (hoverHighlightElement.current) {
+      removeDomHoverHighlight(hoverHighlightElement.current)
+      hoverHighlightElement.current = null
+    }
+  }, [rendition])
 
   // 监听 hoveredSegmentId 变化，添加/移除阅读界面高亮
   useEffect(() => {
-    if (!rendition) return
+    const targetRendition = rendition ?? lastRenditionRef.current
+    if (!targetRendition) return
 
-    // 移除之前的高亮
-    if (currentHighlightedElement.current) {
-      removeHighlight(currentHighlightedElement.current, 'segment-hover-highlight')
-      currentHighlightedElement.current = null
-    }
+    // 移除之前的悬停高亮
+    removeHoverHighlights()
 
-    // 添加新的高亮
+    // 添加新的悬停高亮
     if (hoveredSegmentId) {
       const segment = visibleSegments.find(s => s.id === hoveredSegmentId)
-      if (segment?.xpath) {
-        const element = findElementInRendition(segment.xpath, rendition)
+      if (segment?.cfiRange) {
+        applyHoverHighlightByCfi(targetRendition, segment.cfiRange)
+        hoverHighlightCfi.current = segment.cfiRange
+      } else if (segment?.xpath) {
+        const element = findElementInRendition(segment.xpath, targetRendition)
         if (element) {
-          addHighlight(element, 'segment-hover-highlight')
-          currentHighlightedElement.current = element
+          addDomHoverHighlight(element)
+          hoverHighlightElement.current = element
         }
       }
     }
 
     // 清理函数
     return () => {
-      if (currentHighlightedElement.current) {
-        removeHighlight(currentHighlightedElement.current, 'segment-hover-highlight')
-        currentHighlightedElement.current = null
+      removeHoverHighlights()
+    }
+  }, [hoveredSegmentId, visibleSegments, rendition, removeHoverHighlights])
+
+  // 组件卸载时清理高亮
+  useEffect(() => {
+    return () => {
+      removeHoverHighlights()
+      if (flashHighlightCleanup.current) {
+        flashHighlightCleanup.current()
+        flashHighlightCleanup.current = null
       }
     }
-  }, [hoveredSegmentId, visibleSegments, rendition])
+  }, [removeHoverHighlights])
 
   // 处理接受
   const handleAccept = () => {
@@ -94,6 +134,25 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
     setEditMode(true) // 进入编辑模式
   }
 
+  const triggerFlashHighlight = useCallback((segment: typeof visibleSegments[0]) => {
+    const targetRendition = rendition ?? lastRenditionRef.current
+    if (!targetRendition) return
+
+    if (flashHighlightCleanup.current) {
+      flashHighlightCleanup.current()
+      flashHighlightCleanup.current = null
+    }
+
+    if (segment.cfiRange) {
+      flashHighlightCleanup.current = flashHighlightByCfi(targetRendition, segment.cfiRange)
+    } else if (segment.xpath) {
+      const element = findElementInRendition(segment.xpath, targetRendition)
+      if (element) {
+        addDomFlashHighlight(element)
+      }
+    }
+  }, [rendition])
+
   // 处理卡片点击
   const handleCardClick = (segment: typeof visibleSegments[0]) => {
     // 清除 hover 状态，避免冲突
@@ -104,34 +163,33 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
 
     // 异步执行跳转和闪烁高亮
     requestAnimationFrame(() => {
-      if (!rendition) return
+      const targetRendition = rendition ?? lastRenditionRef.current
+      if (!targetRendition) return
 
       // 如果有 CFI，使用 CFI 跨页跳转
       if (segment.cfiRange) {
         // 调用 rendition.display 跳转到目标页面
-        rendition.display(segment.cfiRange).then(() => {
-          // 监听 relocated 事件，等待页面渲染完成
-          const handleRelocated = () => {
-            // 使用 XPath 精确定位元素
-            const element = findElementInRendition(segment.xpath, rendition)
-            if (element) {
-              scrollToElement(element)
-              addFlashHighlight(element)
-            }
-            // 移除一次性监听器
-            rendition.off('relocated', handleRelocated)
+        const handleRelocated = () => {
+          const element = findElementInRendition(segment.xpath, targetRendition)
+          if (element) {
+            scrollToElement(element)
           }
+          triggerFlashHighlight(segment)
+          targetRendition.off('relocated', handleRelocated)
+        }
 
-          rendition.on('relocated', handleRelocated)
-        }).catch((error) => {
+        targetRendition.on('relocated', handleRelocated)
+
+        targetRendition.display(segment.cfiRange).catch((error) => {
           console.warn('CFI 跳转失败:', segment.cfiRange, error)
+          targetRendition.off('relocated', handleRelocated)
         })
       } else {
         // 降级：没有 CFI，仅在当前页面尝试定位
-        const element = findElementInRendition(segment.xpath, rendition)
+        const element = findElementInRendition(segment.xpath, targetRendition)
         if (element) {
           scrollToElement(element)
-          addFlashHighlight(element)
+          triggerFlashHighlight(segment)
         } else {
           console.warn('无法跳转：元素不在当前页面，且缺少 CFI')
         }

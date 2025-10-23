@@ -31,26 +31,3 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
-
-/* 段落悬停高亮（右侧栏 hover 触发） */
-.segment-hover-highlight {
-  background-color: rgba(59, 130, 246, 0.15) !important;
-  transition: background-color 0.2s ease;
-  border-radius: 2px;
-}
-
-/* 段落闪烁高亮（点击卡片触发） */
-.segment-flash-highlight {
-  animation: flashHighlight 1.5s ease-out forwards;
-}
-
-@keyframes flashHighlight {
-  0% {
-    background-color: rgba(59, 130, 246, 0.4);
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
-  }
-  100% {
-    background-color: transparent;
-    box-shadow: 0 0 0 0 transparent;
-  }
-}
