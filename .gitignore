@@ -37,3 +37,7 @@ release/
 
 # Projects
 projects/
+
+# Database files
+*.db
+*.db-journal

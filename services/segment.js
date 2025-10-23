@@ -350,14 +350,6 @@ class SegmentService {
       range.setStart(firstTextNode, 0)
       range.setEnd(lastTextNode, lastTextNode.textContent.length)
 
-      console.log('📍 Range 信息:', {
-        collapsed: range.collapsed,
-        startContainer: firstTextNode.textContent.substring(0, 20),
-        endContainer: lastTextNode.textContent.substring(0, 20),
-        startOffset: 0,
-        endOffset: lastTextNode.textContent.length
-      })
-
       // 正确的用法：传入 Range 和 cfiBase 字符串
       const cfiInstance = new EpubCFI(range, cfiBase)
 
@@ -367,10 +359,9 @@ class SegmentService {
       if (cfiString && cfiString.startsWith('epubcfi(')) {
         // 验证 CFI 格式正确且包含 spine 路径
         if (cfiString.includes('epubcfi(/!/')) {
-          console.warn('⚠️ CFI 仍然是无效格式（包含 /!）:', cfiString)
+          console.warn('⚠️ CFI 格式无效（缺少 spine 路径）:', cfiString)
           return null
         }
-        console.log('✅ 生成的 CFI:', cfiString.substring(0, 100) + '...')
         return cfiString
       } else {
         console.warn('⚠️ CFI 生成返回无效格式:', cfiString)
