@@ -217,19 +217,30 @@ ipcMain.handle('project:open', async (event, projectId) => {
 
 // IPC 处理：保存分段
 ipcMain.handle('segments:save', async (event, projectId, segments) => {
+  console.log('📨 IPC: segments:save 收到请求')
+  console.log('📦 参数:', { projectId, segmentsCount: segments.length })
+
   try {
+    console.log('🔄 调用 dbService.saveSegments...')
     dbService.saveSegments(projectId, segments)
+    console.log('✅ saveSegments 执行完成')
     return { success: true }
   } catch (error) {
-    console.error('IPC保存分段失败:', error)
+    console.error('❌ IPC保存分段失败:', error)
+    console.error('Stack:', error.stack)
     return { success: false, error: error.message }
   }
 })
 
 // IPC 处理：加载分段
 ipcMain.handle('segments:load', async (event, projectId, chapterId) => {
+  console.log('📥 IPC: segments:load 收到请求', { projectId, chapterId })
   try {
     const segments = dbService.loadSegments(projectId, chapterId)
+    console.log(`📥 IPC: 加载了 ${segments.length} 个分段`)
+    if (segments.length > 0) {
+      console.log('📥 IPC: 第一个分段的 CFI:', segments[0].cfiRange?.substring(0, 50))
+    }
     return { success: true, data: segments }
   } catch (error) {
     console.error('IPC加载分段失败:', error)

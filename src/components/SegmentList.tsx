@@ -11,15 +11,11 @@ import { useBookStore } from '../store/bookStore'
 import SegmentCard from './SegmentCard'
 import SegmentDetail from './SegmentDetail'
 import {
-  findElementInRendition,
-  applyHoverHighlightByCfi,
-  removeHighlightByCfi,
-  flashHighlightByCfi,
-  addDomHoverHighlight,
-  removeDomHoverHighlight,
-  addDomFlashHighlight,
-  scrollToElement,
-  setupStyleInjection
+  setupHighlightTheme,
+  applyHoverHighlight,
+  removeHighlight,
+  flashHighlight,
+  generateCFIFromXPath
 } from '../utils/highlightHelper'
 
 interface Props {
@@ -47,15 +43,16 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
 
   // 记录当前悬停高亮的 CFI
   const hoverHighlightCfi = useRef<string | null>(null)
-  // 记录当前高亮的 DOM 元素，用于兜底移除
-  const hoverHighlightElement = useRef<Element | null>(null)
   // 记录当前闪烁高亮的清理函数
   const flashHighlightCleanup = useRef<(() => void) | null>(null)
+  // 跳转状态跟踪
+  const isJumpingRef = useRef(false)
+  const jumpCleanupRef = useRef<(() => void) | null>(null)
 
-  // 初始化样式注入：监听 rendition 变化，自动注入高亮样式
+  // 初始化高亮主题：监听 rendition 变化
   useEffect(() => {
     if (rendition) {
-      setupStyleInjection(rendition)
+      setupHighlightTheme(rendition)
       lastRenditionRef.current = rendition
     }
   }, [rendition])
@@ -64,13 +61,8 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
     const targetRendition = rendition ?? lastRenditionRef.current
 
     if (hoverHighlightCfi.current && targetRendition) {
-      removeHighlightByCfi(targetRendition, hoverHighlightCfi.current)
+      removeHighlight(targetRendition, hoverHighlightCfi.current)
       hoverHighlightCfi.current = null
-    }
-
-    if (hoverHighlightElement.current) {
-      removeDomHoverHighlight(hoverHighlightElement.current)
-      hoverHighlightElement.current = null
     }
   }, [rendition])
 
@@ -82,18 +74,12 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
     // 移除之前的悬停高亮
     removeHoverHighlights()
 
-    // 添加新的悬停高亮
+    // 添加新的悬停高亮 (优先使用 CFI，否则从 XPath 生成)
     if (hoveredSegmentId) {
       const segment = visibleSegments.find(s => s.id === hoveredSegmentId)
-      if (segment?.cfiRange) {
-        applyHoverHighlightByCfi(targetRendition, segment.cfiRange)
-        hoverHighlightCfi.current = segment.cfiRange
-      } else if (segment?.xpath) {
-        const element = findElementInRendition(segment.xpath, targetRendition)
-        if (element) {
-          addDomHoverHighlight(element)
-          hoverHighlightElement.current = element
-        }
+      if (segment) {
+        applyHoverHighlight(targetRendition, segment.cfiRange, segment.xpath)
+        hoverHighlightCfi.current = segment.cfiRange || null
       }
     }
 
@@ -138,62 +124,123 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
     const targetRendition = rendition ?? lastRenditionRef.current
     if (!targetRendition) return
 
+    // 清理之前的闪烁高亮
     if (flashHighlightCleanup.current) {
       flashHighlightCleanup.current()
       flashHighlightCleanup.current = null
     }
 
-    if (segment.cfiRange) {
-      flashHighlightCleanup.current = flashHighlightByCfi(targetRendition, segment.cfiRange)
-    } else if (segment.xpath) {
-      const element = findElementInRendition(segment.xpath, targetRendition)
-      if (element) {
-        addDomFlashHighlight(element)
-      }
-    }
+    // 闪烁高亮 (优先使用 CFI，否则从 XPath 生成)
+    flashHighlightCleanup.current = flashHighlight(
+      targetRendition,
+      segment.cfiRange,
+      1500, // duration
+      segment.xpath
+    )
   }, [rendition])
 
-  // 处理卡片点击
+  // 处理卡片点击 - 使用 Ref 跟踪状态
   const handleCardClick = (segment: typeof visibleSegments[0]) => {
-    // 清除 hover 状态，避免冲突
+    const targetRendition = rendition ?? lastRenditionRef.current
+    if (!targetRendition) {
+      console.warn('handleCardClick: rendition 不可用')
+      return
+    }
+
+    // 防止重复点击
+    if (isJumpingRef.current) {
+      console.warn('跳转进行中,请稍候')
+      return
+    }
+
+    // 获取有效的 CFI
+    // 检查 CFI 是否有效（不是主进程生成的无效格式）
+    const isInvalidCFI = segment.cfiRange && segment.cfiRange.includes('epubcfi(/!/')
+
+    let cfi = segment.cfiRange
+
+    if (isInvalidCFI || !cfi) {
+      // CFI 无效或不存在，从 XPath 生成
+      if (segment.xpath) {
+        if (isInvalidCFI) {
+          console.log('⚠️ CFI 无效，从 XPath 重新生成:', segment.cfiRange)
+        } else {
+          console.log('⏳ CFI 缺失，从 XPath 生成...', segment.xpath)
+        }
+        cfi = generateCFIFromXPath(segment.xpath, targetRendition)
+      }
+    }
+
+    if (!cfi) {
+      console.error('❌ 无法跳转: 无法获取有效的 CFI', {
+        id: segment.id,
+        cfiRange: segment.cfiRange,
+        xpath: segment.xpath,
+        isInvalid: isInvalidCFI
+      })
+      // 仍然进入详情页
+      setSelectedSegment(segment.id)
+      return
+    }
+
+    // 清除 hover 状态
     setHoveredSegment(null)
 
     // 进入详情页
     setSelectedSegment(segment.id)
 
-    // 异步执行跳转和闪烁高亮
-    requestAnimationFrame(() => {
-      const targetRendition = rendition ?? lastRenditionRef.current
-      if (!targetRendition) return
+    // 设置跳转状态
+    isJumpingRef.current = true
 
-      // 如果有 CFI，使用 CFI 跨页跳转
-      if (segment.cfiRange) {
-        // 调用 rendition.display 跳转到目标页面
-        const handleRelocated = () => {
-          const element = findElementInRendition(segment.xpath, targetRendition)
-          if (element) {
-            scrollToElement(element)
-          }
+    // 定义 relocated 处理函数
+    const handleRelocated = () => {
+      if (!isJumpingRef.current) return // 已被取消
+
+      console.log('✅ 页面跳转完成,准备触发高亮')
+
+      // 等待 DOM 稳定后触发闪烁高亮
+      setTimeout(() => {
+        if (isJumpingRef.current) {
           triggerFlashHighlight(segment)
-          targetRendition.off('relocated', handleRelocated)
         }
+        cleanup()
+      }, 100)
+    }
 
-        targetRendition.on('relocated', handleRelocated)
+    // 清理函数
+    const cleanup = () => {
+      isJumpingRef.current = false
+      targetRendition.off('relocated', handleRelocated)
+      if (timeoutId) clearTimeout(timeoutId)
+      jumpCleanupRef.current = null
+    }
 
-        targetRendition.display(segment.cfiRange).catch((error) => {
-          console.warn('CFI 跳转失败:', segment.cfiRange, error)
-          targetRendition.off('relocated', handleRelocated)
-        })
-      } else {
-        // 降级：没有 CFI，仅在当前页面尝试定位
-        const element = findElementInRendition(segment.xpath, targetRendition)
-        if (element) {
-          scrollToElement(element)
-          triggerFlashHighlight(segment)
-        } else {
-          console.warn('无法跳转：元素不在当前页面，且缺少 CFI')
-        }
+    jumpCleanupRef.current = cleanup
+
+    // 注册 relocated 监听器
+    targetRendition.on('relocated', handleRelocated)
+
+    // 设置超时保护
+    const timeoutId = setTimeout(() => {
+      if (isJumpingRef.current) {
+        console.warn('⚠️ relocated 事件超时 (3秒)')
+        cleanup()
       }
+    }, 3000)
+
+    // 执行 CFI 跳转
+    targetRendition.display(cfi).catch((error) => {
+      console.group('❌ CFI 跳转失败')
+      console.error('CFI:', cfi)
+      console.error('Segment ID:', segment.id)
+      console.error('Chapter:', segment.chapterHref)
+      console.error('错误:', error)
+      console.error('可能原因:')
+      console.error('  1. CFI 格式无效')
+      console.error('  2. 目标页面不存在')
+      console.error('  3. epub.js 内部错误')
+      console.groupEnd()
+      cleanup()
     })
   }
 

@@ -207,10 +207,17 @@ class DatabaseService {
    * 保存前生成 CFI Range
    */
   saveSegments(projectId, segments) {
+    console.log('==========================================')
+    console.log('🚨 DATABASE.JS: saveSegments 被调用!')
     console.log(`开始保存 segments，共 ${segments.length} 个`)
+    console.log('projectId:', projectId)
+    console.log('第一个segment:', segments[0])
+    console.log('==========================================')
 
-    // 在保存前生成 CFI
+    // 在保存前生成 CFI（使用 OPF 文件获取 spine 信息）
+    console.log('⏰ 准备调用 generateCFIForSegments...')
     this.generateCFIForSegments(projectId, segments)
+    console.log('⏰ generateCFIForSegments 调用完成')
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
@@ -248,22 +255,126 @@ class DatabaseService {
   }
 
   /**
+   * 解析 OPF 文件，获取 spine 映射
+   * @param {string} opfPath - OPF 文件路径
+   * @returns {Object} { spineNodeIndex, spineMap: { idref -> { index, id, href } } }
+   */
+  parseOPFSpine(opfPath) {
+    try {
+      const opfContent = fs.readFileSync(opfPath, 'utf-8')
+      const { JSDOM } = require('jsdom')
+      const dom = new JSDOM(opfContent, { contentType: 'text/xml' })
+      const doc = dom.window.document
+
+      // 获取 spine 节点在 package 中的位置（通常是第3个子元素，index=2）
+      const packageElement = doc.querySelector('package')
+      if (!packageElement) {
+        console.error('❌ 找不到 package 元素')
+        return null
+      }
+
+      let spineNodeIndex = 0
+      const children = Array.from(packageElement.children)
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].tagName.toLowerCase() === 'spine') {
+          spineNodeIndex = i
+          break
+        }
+      }
+
+      // 获取 manifest（id -> href 映射）
+      const manifestItems = doc.querySelectorAll('manifest > item')
+      const manifestMap = {}
+      manifestItems.forEach(item => {
+        const id = item.getAttribute('id')
+        const href = item.getAttribute('href')
+        if (id && href) {
+          manifestMap[id] = href
+        }
+      })
+
+      // 获取 spine（idref -> index 映射）
+      const itemrefs = doc.querySelectorAll('spine > itemref')
+      const spineMap = {}
+      itemrefs.forEach((itemref, index) => {
+        const idref = itemref.getAttribute('idref')
+        if (idref) {
+          spineMap[idref] = {
+            index: index,
+            id: idref,
+            href: manifestMap[idref] || null
+          }
+        }
+      })
+
+      console.log('✅ OPF 解析完成:', {
+        spineNodeIndex,
+        spineItems: Object.keys(spineMap).length
+      })
+
+      return { spineNodeIndex, spineMap }
+    } catch (error) {
+      console.error('❌ 解析 OPF 失败:', error)
+      return null
+    }
+  }
+
+  /**
+   * 生成 cfiBase
+   * @param {number} spineNodeIndex - spine 节点在 package 中的索引
+   * @param {number} spineItemIndex - 章节在 spine 中的索引
+   * @param {string} id - 章节 ID
+   * @returns {string} cfiBase，例如：/6/8[c1_1t.xhtml]
+   */
+  generateCFIBase(spineNodeIndex, spineItemIndex, id) {
+    const spinePath = (spineNodeIndex + 1) * 2
+    const itemPath = (spineItemIndex + 1) * 2
+    let cfiBase = `/${spinePath}/${itemPath}`
+    if (id) {
+      cfiBase += `[${id}]`
+    }
+    return cfiBase
+  }
+
+  /**
    * 为 segments 生成 CFI Range
    * 按章节分组，避免重复加载 XHTML
    * @param {string} projectId - 项目ID
    * @param {Array} segments - 分段数组
    */
   generateCFIForSegments(projectId, segments) {
+    console.log('🔧 generateCFIForSegments 开始执行', { projectId, segmentsCount: segments.length })
+
     try {
       // 获取项目解压路径
       const project = this.getProject(projectId)
+      console.log('📁 项目信息:', project)
+
       if (!project) {
-        console.warn('generateCFIForSegments: 项目不存在', projectId)
+        console.error('❌ generateCFIForSegments: 项目不存在', projectId)
         return
       }
 
       // 构建解压路径: projectPath + '/extracted'
       const extractedPath = path.join(project.projectPath, 'extracted')
+      console.log('📂 解压路径:', extractedPath)
+
+      // 查找并解析 OPF 文件
+      const projectService = require('./project')
+      const opfPath = projectService.findOPFFile(extractedPath)
+      if (!opfPath) {
+        console.error('❌ 找不到 OPF 文件')
+        return
+      }
+
+      console.log('📄 OPF 文件:', opfPath)
+      const opfData = this.parseOPFSpine(opfPath)
+      if (!opfData) {
+        console.error('❌ 解析 OPF 失败')
+        return
+      }
+
+      const { spineNodeIndex, spineMap } = opfData
 
       // 按章节分组
       const segmentsByChapter = segments.reduce((acc, segment) => {
@@ -275,59 +386,110 @@ class DatabaseService {
         return acc
       }, {})
 
+      console.log('📚 章节分组:', Object.keys(segmentsByChapter))
+
       let successCount = 0
       let failCount = 0
 
       // 遍历每个章节
       for (const [chapterHref, chapterSegments] of Object.entries(segmentsByChapter)) {
+        console.log(`\n📖 处理章节: ${chapterHref} (${chapterSegments.length} 个段落)`)
+
         try {
           // 构建 XHTML 文件路径
-          const xhtmlPath = path.join(extractedPath, chapterHref)
+          let xhtmlPath = path.join(extractedPath, chapterHref)
+
+          // 🔧 修复：如果文件不存在，尝试添加 OEBPS/ 前缀
+          if (!fs.existsSync(xhtmlPath)) {
+            const oebpsPath = path.join(extractedPath, 'OEBPS', chapterHref)
+            if (fs.existsSync(oebpsPath)) {
+              console.log('🔧 修复路径: 添加 OEBPS/ 前缀')
+              xhtmlPath = oebpsPath
+            }
+          }
+
+          console.log('📄 XHTML 路径:', xhtmlPath)
 
           if (!fs.existsSync(xhtmlPath)) {
-            console.warn(`generateCFIForSegments: XHTML 文件不存在: ${xhtmlPath}`)
+            console.error(`❌ XHTML 文件不存在: ${xhtmlPath}`)
             failCount += chapterSegments.length
             continue
           }
 
+          console.log('✅ XHTML 文件存在，开始读取...')
+
           // 读取并解析 XHTML
           const html = fs.readFileSync(xhtmlPath, 'utf-8')
+          console.log('📝 HTML 长度:', html.length)
+
           const dom = new JSDOM(html, { contentType: 'text/html' })
           const document = dom.window.document
+          console.log('🌐 DOM 创建成功')
+
+          // 根据 chapterHref 查找 spine 信息
+          let spineInfo = null
+          for (const [idref, info] of Object.entries(spineMap)) {
+            if (info.href === chapterHref) {
+              spineInfo = info
+              break
+            }
+          }
+
+          if (!spineInfo) {
+            console.error(`❌ 找不到章节的 spine 信息: ${chapterHref}`)
+            failCount += chapterSegments.length
+            continue
+          }
+
+          // 生成 cfiBase
+          const cfiBase = this.generateCFIBase(spineNodeIndex, spineInfo.index, spineInfo.id)
+          console.log(`📍 cfiBase: ${cfiBase}`)
 
           // 为该章节的每个 segment 生成 CFI
+          let chapterSuccessCount = 0
+          let chapterFailCount = 0
+
           for (const segment of chapterSegments) {
             try {
               // 通过 XPath 找到元素
               const element = segmentService.getElementByXPath(document, segment.xpath)
 
               if (element) {
-                // 生成 CFI
-                const cfiRange = segmentService.generateCFI(element, document)
+                console.log(`  🔍 找到元素: ${segment.xpath} -> ${element.tagName}`)
+
+                // 生成 CFI（传入 cfiBase）
+                const cfiRange = segmentService.generateCFI(element, cfiBase)
+
                 if (cfiRange) {
                   segment.cfiRange = cfiRange
                   successCount++
+                  chapterSuccessCount++
+                  console.log(`  ✅ CFI 生成成功: ${cfiRange.substring(0, 60)}...`)
                 } else {
                   segment.cfiRange = null
                   failCount++
+                  chapterFailCount++
+                  console.warn(`  ⚠️ CFI 生成返回 null`)
                 }
               } else {
-                console.warn('generateCFIForSegments: 未找到元素', {
-                  xpath: segment.xpath,
-                  chapterHref: segment.chapterHref
-                })
+                console.error(`  ❌ 未找到元素: ${segment.xpath}`)
                 segment.cfiRange = null
                 failCount++
+                chapterFailCount++
               }
             } catch (error) {
-              console.warn('generateCFIForSegments: 生成 CFI 失败', {
+              console.error(`  ❌ 异常:`, {
                 segmentId: segment.id,
-                error: error.message
+                error: error.message,
+                stack: error.stack
               })
               segment.cfiRange = null
               failCount++
+              chapterFailCount++
             }
           }
+
+          console.log(`  📊 本章统计: 成功 ${chapterSuccessCount}, 失败 ${chapterFailCount}`)
         } catch (error) {
           console.error('generateCFIForSegments: 处理章节失败', {
             chapterHref,
@@ -337,9 +499,11 @@ class DatabaseService {
         }
       }
 
-      console.log(`CFI 生成完成: 成功 ${successCount} 个，失败 ${failCount} 个`)
+      console.log(`\n🎉 CFI 生成完成: 成功 ${successCount} 个，失败 ${failCount} 个`)
+      console.log(`📈 成功率: ${((successCount / (successCount + failCount)) * 100).toFixed(1)}%`)
     } catch (error) {
-      console.error('generateCFIForSegments: 生成 CFI 失败', error)
+      console.error('❌ generateCFIForSegments: 生成 CFI 失败', error)
+      console.error('Stack:', error.stack)
       // 不抛出异常，允许继续保存（CFI 为 null）
     }
   }

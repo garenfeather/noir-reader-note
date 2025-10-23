@@ -36,23 +36,56 @@ function TranslationPanel({ mode, currentChapterId, currentChapterHref }: Props)
 
   // 接受分段结果
   const handleAccept = async () => {
-    if (!allowEditing) return
+    console.log('🚀 TranslationPanel: handleAccept 被调用')
+    console.log('📊 准备保存的数据:', {
+      allowEditing,
+      currentProject: currentProject?.id,
+      currentChapterId,
+      segmentsCount: segments.length,
+      firstSegment: segments[0]
+    })
+
+    if (!allowEditing) {
+      console.warn('⚠️ allowEditing 为 false，退出')
+      return
+    }
     if (!currentProject || !currentChapterId) {
       message.error('项目信息缺失')
+      console.error('❌ 项目信息缺失')
       return
     }
 
     try {
+      console.log('📤 调用 window.electronAPI.saveSegments...')
       const result = await window.electronAPI.saveSegments(
         currentProject.id,
         segments
       )
+      console.log('📥 saveSegments 返回结果:', result)
 
       if (result.success) {
         message.success(`已保存 ${segments.length} 个分段`)
         setHasUnsavedChanges(false)
         if (currentChapterHref) {
           addChapterWithSegments(currentChapterHref)
+        }
+
+        // 保存成功后，从数据库重新加载带 CFI 的数据
+        console.log('📥 保存成功，重新加载带 CFI 的数据...')
+        try {
+          const loadResult = await window.electronAPI.loadSegments(
+            currentProject.id,
+            currentChapterId
+          )
+          console.log('📥 loadSegments 返回:', loadResult)
+
+          if (loadResult.success && loadResult.data) {
+            const { setSegments } = useSegmentStore.getState()
+            setSegments(loadResult.data)
+            console.log('✅ 已更新 segments，CFI 数据已加载')
+          }
+        } catch (error) {
+          console.error('❌ 重新加载分段失败:', error)
         }
       } else {
         message.error('保存失败: ' + result.error)

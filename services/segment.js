@@ -7,7 +7,7 @@ const { JSDOM } = require('jsdom')
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const EpubCFI = require('epubjs/lib/epubcfi')
+const EpubCFI = require('epubjs/lib/epubcfi').default || require('epubjs/lib/epubcfi')
 
 // 使用 Node.js crypto 生成 UUID
 function uuidv4() {
@@ -286,31 +286,56 @@ class SegmentService {
   /**
    * 为 DOM 元素生成 CFI Range
    * @param {Element} element - 段落元素
-   * @param {Document} document - jsdom 的 document 对象
+   * @param {string} cfiBase - CFI 基础路径，例如：/6/8[c1_1t.xhtml]
    * @returns {string|null} CFI Range 字符串或 null（失败时）
    */
-  generateCFI(element, document) {
+  generateCFI(element, cfiBase) {
     try {
-      if (!element || !document) {
-        console.warn('generateCFI: 缺少必要参数')
+      if (!element || !cfiBase) {
+        console.warn('generateCFI: 缺少必要参数', { element: !!element, cfiBase })
         return null
       }
 
-      // 创建 Range 对象
-      const range = document.createRange()
+      // 检查 EpubCFI 是否正确导入
+      if (!EpubCFI) {
+        console.error('generateCFI: EpubCFI 未正确导入')
+        return null
+      }
 
-      // 选择元素的所有内容
+      // 获取元素所在的 document
+      const document = element.ownerDocument
+      if (!document) {
+        console.error('generateCFI: 无法获取 document')
+        return null
+      }
+
+      // 创建 Range 对象，包含整个元素的内容
+      const range = document.createRange()
       range.selectNodeContents(element)
 
-      // 使用 epubjs 自带的 EpubCFI 生成 CFI
-      const cfi = new EpubCFI()
-      const cfiRange = cfi.generateCfiFromRange(range, document)
+      // 正确的用法：传入 Range 和 cfiBase 字符串
+      const cfiInstance = new EpubCFI(range, cfiBase)
 
-      return cfiRange || null
+      // 调用 toString() 获取完整的 CFI 字符串
+      const cfiString = cfiInstance.toString()
+
+      if (cfiString && cfiString.startsWith('epubcfi(')) {
+        // 验证 CFI 格式正确且包含 spine 路径
+        if (cfiString.includes('epubcfi(/!/')) {
+          console.warn('⚠️ CFI 仍然是无效格式（包含 /!）:', cfiString)
+          return null
+        }
+        return cfiString
+      } else {
+        console.warn('⚠️ CFI 生成返回无效格式:', cfiString)
+        return null
+      }
     } catch (error) {
-      console.warn('generateCFI: 生成 CFI 失败', {
+      console.error('❌ generateCFI: 生成失败', {
         tagName: element?.tagName,
-        error: error.message
+        cfiBase,
+        error: error.message,
+        stack: error.stack
       })
       return null
     }

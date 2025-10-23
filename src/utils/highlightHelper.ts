@@ -1,172 +1,51 @@
 /**
  * 高亮辅助工具函数
- * 用于在 epub.js 的 iframe 中定位元素和添加高亮效果
+ * 使用 epub.js 的 annotations API 实现简单可靠的高亮效果
  */
 
 import { Rendition } from 'epubjs'
 
-const ANNOTATION_HOVER_CLASS = 'segment-annot-hover'
-const ANNOTATION_FLASH_CLASS = 'segment-annot-flash'
-const DOM_HOVER_CLASS = 'segment-hover-highlight'
-const DOM_FLASH_CLASS = 'segment-flash-highlight'
 const FLASH_HIGHLIGHT_DURATION = 1500
 
 /**
- * 高亮样式 CSS
- * 注入至 epub.js iframe, 为 DOM 兜底高亮提供样式
- */
-const HIGHLIGHT_STYLES = `
-  /* iframe 内 DOM 兜底样式 */
-  .${DOM_HOVER_CLASS} {
-    background-image: linear-gradient(
-      to bottom,
-      transparent 35%,
-      rgba(59, 130, 246, 0.3) 35%,
-      rgba(59, 130, 246, 0.3) 90%,
-      transparent 90%
-    ) !important;
-    background-size: 100% calc(1em + 6px) !important;
-    background-position: 0 0.35em !important;
-    background-repeat: repeat-y !important;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-    padding: 0 0.15em !important;
-    border-radius: 2px;
-    transition: background-image 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .${DOM_FLASH_CLASS} {
-    background-image: linear-gradient(
-      to bottom,
-      transparent 35%,
-      rgba(59, 130, 246, 0.55) 35%,
-      rgba(59, 130, 246, 0.55) 90%,
-      transparent 90%
-    ) !important;
-    background-size: 100% calc(1em + 6px) !important;
-    background-position: 0 0.35em !important;
-    background-repeat: repeat-y !important;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-    padding: 0 0.15em !important;
-    border-radius: 2px;
-    animation: flashUnderline 1.5s ease-out forwards;
-  }
-
-  @keyframes flashUnderline {
-    0% {
-      background-image: linear-gradient(
-        to bottom,
-        transparent 35%,
-        rgba(59, 130, 246, 0.75) 35%,
-        rgba(59, 130, 246, 0.75) 90%,
-        transparent 90%
-      );
-      box-shadow: inset 0 -0.25em 0 rgba(59, 130, 246, 0.35);
-    }
-    100% {
-      background-image: linear-gradient(
-        to bottom,
-        transparent 35%,
-        rgba(59, 130, 246, 0) 35%,
-        rgba(59, 130, 246, 0) 90%,
-        transparent 90%
-      );
-      box-shadow: inset 0 -0.25em 0 rgba(59, 130, 246, 0);
-    }
-  }
-
-  /* epub.js 注解高亮样式 */
-  .${ANNOTATION_HOVER_CLASS} {
-    mix-blend-mode: multiply;
-  }
-
-  .${ANNOTATION_HOVER_CLASS} rect {
-    fill: rgba(59, 130, 246, 0.32);
-    transition: fill-opacity 0.2s ease;
-  }
-
-  .${ANNOTATION_FLASH_CLASS} {
-    mix-blend-mode: multiply;
-  }
-
-  .${ANNOTATION_FLASH_CLASS} rect {
-    fill: rgba(59, 130, 246, 0.55);
-    animation: flashHighlight 1.5s ease-out forwards;
-  }
-
-  @keyframes flashHighlight {
-    0% {
-      fill-opacity: 0.95;
-    }
-    100% {
-      fill-opacity: 0;
-    }
-  }
-`
-
-/**
- * 将高亮样式注入到 epub.js 的 iframe 中
- * 应该在 rendition 准备好后调用一次
+ * 配置 epub.js 的高亮主题样式
+ * 使用 rendition.themes API 设置全局样式,无需手动注入
  * @param rendition - epub.js 的 Rendition 实例
  */
-export function injectHighlightStyles(rendition: Rendition | null): void {
+const configuredRenditions = new WeakSet<Rendition>()
+
+export function setupHighlightTheme(rendition: Rendition | null): void {
   if (!rendition) {
-    console.warn('injectHighlightStyles: rendition 为 null')
+    console.warn('setupHighlightTheme: rendition 为 null')
     return
+  }
+
+  if (configuredRenditions.has(rendition)) {
+    return // 避免重复配置
   }
 
   try {
-    const rawContents = rendition.getContents() as unknown
-    if (!Array.isArray(rawContents) || rawContents.length === 0) {
-      console.warn('injectHighlightStyles: 无法获取 contents')
-      return
-    }
-
-    // 注入样式到所有当前加载的 contents
-    rawContents.forEach((content: { addStylesheetCss?: (css: string, id?: string) => void }) => {
-      try {
-        if (typeof content.addStylesheetCss === 'function') {
-          content.addStylesheetCss(HIGHLIGHT_STYLES, 'segment-highlight-styles')
-        } else {
-          console.warn('injectHighlightStyles: content 缺少 addStylesheetCss 方法')
-        }
-      } catch (error) {
-        console.warn('注入高亮样式失败:', error)
+    // 使用 epub.js 官方推荐的 themes API
+    // 参考: node_modules/epubjs/examples/highlights.html:125-132
+    rendition.themes.default({
+      // 悬停高亮样式 - 浅蓝色半透明
+      '.epubjs-hl': {
+        'fill': 'rgb(59, 130, 246)',
+        'fill-opacity': '0.3',
+        'mix-blend-mode': 'multiply'
       }
     })
 
-    console.log('✅ 高亮样式已注入到 epub.js iframe', rawContents.length, 'pages')
+    configuredRenditions.add(rendition)
+    console.log('✅ epub.js 高亮主题已配置')
   } catch (error) {
-    console.error('injectHighlightStyles: 注入失败', error)
+    console.error('setupHighlightTheme: 配置失败', error)
   }
 }
 
 /**
- * 监听 rendition 的 rendered 事件,自动注入样式到新加载的页面
- * @param rendition - epub.js 的 Rendition 实例
+ * 获取 rendition 的 annotations 对象
  */
-const renderedRenditions = new WeakSet<Rendition>()
-
-export function setupStyleInjection(rendition: Rendition | null): void {
-  if (!rendition) return
-
-  // 先对当前已加载内容注入一次样式
-  injectHighlightStyles(rendition)
-
-  if (renderedRenditions.has(rendition)) {
-    return
-  }
-
-  // 监听页面渲染事件,为新页面注入样式
-  const handleRendered = () => {
-    injectHighlightStyles(rendition)
-  }
-
-  rendition.on('rendered', handleRendered)
-  renderedRenditions.add(rendition)
-}
-
 function getAnnotations(rendition: Rendition | null) {
   if (!rendition) return null
 
@@ -179,77 +58,177 @@ function getAnnotations(rendition: Rendition | null) {
   return annotations
 }
 
-const HOVER_HIGHLIGHT_STYLES = {
-  fill: 'rgba(59, 130, 246, 0.32)',
-  'fill-opacity': '0.32',
-  'mix-blend-mode': 'multiply',
-  rx: '3',
-  ry: '2'
-}
-
-const FLASH_HIGHLIGHT_STYLES = {
-  fill: 'rgba(59, 130, 246, 0.55)',
-  'fill-opacity': '0.55',
-  'mix-blend-mode': 'multiply',
-  rx: '3',
-  ry: '2'
-}
-
 /**
- * 使用 epub.js 注解高亮指定的 CFI 范围
+ * 通过 XPath 生成完整的 CFI
+ * @param xpath - XPath 路径
+ * @param rendition - epub.js 的 Rendition 实例
+ * @returns CFI 字符串或 null
  */
-export function applyHoverHighlightByCfi(
-  rendition: Rendition | null,
-  cfiRange: string | null | undefined
-): void {
-  if (!rendition || !cfiRange) return
-
-  const annotations = getAnnotations(rendition)
-  if (!annotations) return
+export function generateCFIFromXPath(
+  xpath: string,
+  rendition: Rendition | null
+): string | null {
+  if (!rendition || !xpath) return null
 
   try {
-    annotations.remove(cfiRange, 'highlight')
-    annotations.highlight(
-      cfiRange,
-      { highlightType: 'hover' },
-      undefined,
-      ANNOTATION_HOVER_CLASS,
-      HOVER_HIGHLIGHT_STYLES
-    )
+    // 1. 在当前渲染的文档中通过 XPath 找到元素
+    const element = findElementInRendition(xpath, rendition)
+    if (!element) {
+      console.warn('generateCFIFromXPath: 未找到元素', xpath)
+      return null
+    }
+
+    // 2. 获取当前显示的 section
+    const rawContents = rendition.getContents() as unknown
+    if (!Array.isArray(rawContents) || rawContents.length === 0) {
+      console.warn('generateCFIFromXPath: 无法获取 contents')
+      return null
+    }
+
+    // 获取第一个 content（当前页面）
+    const content = rawContents[0] as { section?: any }
+    const section = content.section
+    if (!section || typeof section.cfiFromElement !== 'function') {
+      console.warn('generateCFIFromXPath: section 不可用或缺少 cfiFromElement 方法')
+      return null
+    }
+
+    // 3. 使用 section.cfiFromElement() 生成完整 CFI
+    const cfi = section.cfiFromElement(element)
+
+    if (!cfi || !cfi.startsWith('epubcfi(')) {
+      console.warn('generateCFIFromXPath: 生成的 CFI 格式无效', cfi)
+      return null
+    }
+
+    console.log('✅ 从 XPath 生成 CFI 成功:', { xpath, cfi: cfi.substring(0, 50) + '...' })
+    return cfi
+
   } catch (error) {
-    console.warn('applyHoverHighlightByCfi: 高亮失败', cfiRange, error)
+    console.error('❌ generateCFIFromXPath 失败:', error)
+    return null
   }
 }
 
 /**
- * 移除指定 CFI 的注解高亮
+ * 检查 CFI 是否有效（不是主进程生成的不完整格式）
  */
-export function removeHighlightByCfi(
-  rendition: Rendition | null,
-  cfiRange: string | null | undefined
-): void {
-  if (!rendition || !cfiRange) return
-
-  const annotations = getAnnotations(rendition)
-  if (!annotations) return
-
-  try {
-    annotations.remove(cfiRange, 'highlight')
-  } catch (error) {
-    console.warn('removeHighlightByCfi: 移除失败', cfiRange, error)
-  }
+function isValidCFI(cfi: string | null | undefined): boolean {
+  if (!cfi || !cfi.startsWith('epubcfi(')) return false
+  // 主进程生成的无效 CFI 格式：epubcfi(/!/...)
+  // 有效的 CFI 应该是：epubcfi(/6/4[...]!/...)
+  if (cfi.includes('epubcfi(/!/')) return false
+  return true
 }
 
 /**
- * 添加一次性闪烁高亮，自动在持续时间后移除
- * 返回清理函数，可在高亮完成前手动取消
+ * 悬停高亮: 使用 epub.js 注解 API
+ * 优先使用 cfiRange，如果无效则从 xpath 动态生成
  */
-export function flashHighlightByCfi(
+export function applyHoverHighlight(
   rendition: Rendition | null,
   cfiRange: string | null | undefined,
-  duration = FLASH_HIGHLIGHT_DURATION
+  xpath?: string
+): void {
+  if (!rendition) {
+    console.warn('applyHoverHighlight: rendition 为 null')
+    return
+  }
+
+  // 检查 CFI 是否有效
+  let actualCFI: string | null = null
+
+  if (isValidCFI(cfiRange)) {
+    actualCFI = cfiRange!
+  } else if (xpath) {
+    // CFI 无效或不存在，从 XPath 生成
+    if (cfiRange) {
+      console.log('⚠️ 数据库中的 CFI 无效，从 XPath 重新生成:', cfiRange)
+    } else {
+      console.log('⏳ CFI 不存在，从 XPath 生成...', xpath)
+    }
+    actualCFI = generateCFIFromXPath(xpath, rendition)
+  }
+
+  if (!actualCFI) {
+    console.warn('applyHoverHighlight: 无法获取有效的 CFI', { cfiRange, xpath })
+    return
+  }
+
+  const annotations = getAnnotations(rendition)
+  if (!annotations) return
+
+  try {
+    // 先移除可能存在的旧高亮
+    annotations.remove(actualCFI, 'highlight')
+
+    // 添加新高亮，传递明确的样式
+    const mark = annotations.highlight(actualCFI, {}, (e: any) => {
+      console.log('高亮被点击:', e)
+    }, 'epubjs-hl', {
+      'fill': 'yellow',
+      'fill-opacity': '0.3'
+    })
+
+    console.log('✅ 悬停高亮已应用:', actualCFI, '返回值:', mark)
+  } catch (error) {
+    console.error('❌ 悬停高亮失败:', actualCFI, error)
+  }
+}
+
+/**
+ * 移除高亮
+ */
+export function removeHighlight(
+  rendition: Rendition | null,
+  cfiRange: string | null | undefined
+): void {
+  if (!rendition || !cfiRange) return
+
+  const annotations = getAnnotations(rendition)
+  if (!annotations) return
+
+  try {
+    annotations.remove(cfiRange, 'highlight')
+    console.log('✅ 高亮已移除:', cfiRange)
+  } catch (error) {
+    console.warn('removeHighlight: 移除失败', cfiRange, error)
+  }
+}
+
+/**
+ * 闪烁高亮: 添加高亮后自动在持续时间后移除
+ * 返回清理函数,可在高亮完成前手动取消
+ * 优先使用 cfiRange，如果无效则从 xpath 动态生成
+ */
+export function flashHighlight(
+  rendition: Rendition | null,
+  cfiRange: string | null | undefined,
+  duration = FLASH_HIGHLIGHT_DURATION,
+  xpath?: string
 ): () => void {
-  if (!rendition || !cfiRange) {
+  if (!rendition) {
+    console.warn('flashHighlight: rendition 为 null')
+    return () => {}
+  }
+
+  // 检查 CFI 是否有效
+  let actualCFI: string | null = null
+
+  if (isValidCFI(cfiRange)) {
+    actualCFI = cfiRange!
+  } else if (xpath) {
+    // CFI 无效或不存在，从 XPath 生成
+    if (cfiRange) {
+      console.log('⚠️ 数据库中的 CFI 无效，从 XPath 重新生成 (闪烁):', cfiRange)
+    } else {
+      console.log('⏳ CFI 不存在，从 XPath 生成 (闪烁)...', xpath)
+    }
+    actualCFI = generateCFIFromXPath(xpath, rendition)
+  }
+
+  if (!actualCFI) {
+    console.warn('flashHighlight: 无法获取有效的 CFI', { cfiRange, xpath })
     return () => {}
   }
 
@@ -265,56 +244,32 @@ export function flashHighlightByCfi(
       clearTimeout(timeoutId)
       timeoutId = undefined
     }
-    removeHighlightByCfi(rendition, cfiRange)
+    removeHighlight(rendition, actualCFI)
   }
 
   try {
-    annotations.remove(cfiRange, 'highlight')
-    annotations.highlight(
-      cfiRange,
-      { highlightType: 'flash' },
-      undefined,
-      ANNOTATION_FLASH_CLASS,
-      FLASH_HIGHLIGHT_STYLES
-    )
+    // 先移除可能存在的旧高亮
+    annotations.remove(actualCFI, 'highlight')
 
+    // 添加闪烁高亮,使用主题样式
+    annotations.highlight(actualCFI, {}, undefined)
+
+    // 设置自动移除
     timeoutId = setTimeout(() => {
       cleanup()
     }, duration)
+
+    console.log('✅ 闪烁高亮已应用,将在', duration, 'ms 后移除')
   } catch (error) {
-    console.warn('flashHighlightByCfi: 高亮失败', cfiRange, error)
+    console.error('❌ 闪烁高亮失败:', actualCFI, error)
   }
 
   return cleanup
 }
 
 /**
- * DOM 兜底：添加/移除悬停高亮
- */
-export function addDomHoverHighlight(element: Element): void {
-  element.classList.add(DOM_HOVER_CLASS)
-}
-
-export function removeDomHoverHighlight(element: Element): void {
-  element.classList.remove(DOM_HOVER_CLASS)
-}
-
-/**
- * DOM 兜底：添加闪烁高亮
- */
-export function addDomFlashHighlight(element: Element): void {
-  element.classList.add(DOM_FLASH_CLASS)
-
-  const handleAnimationEnd = () => {
-    element.classList.remove(DOM_FLASH_CLASS)
-    element.removeEventListener('animationend', handleAnimationEnd)
-  }
-
-  element.addEventListener('animationend', handleAnimationEnd)
-}
-
-/**
  * 通过 XPath 在 Document 中查找元素
+ * 仅用于读取段落文本,不用于定位和高亮
  * @param xpath - XPath 路径
  * @param doc - Document 对象
  * @returns 找到的元素或 null
@@ -336,7 +291,8 @@ export function findElementByXPath(xpath: string, doc: Document): Element | null
 }
 
 /**
- * 在 epub.js 的 rendition 中查找元素
+ * 在 epub.js 的 rendition 中通过 XPath 查找元素
+ * 仅用于读取段落文本,不用于定位和高亮
  * @param xpath - XPath 路径
  * @param rendition - epub.js 的 Rendition 实例
  * @returns 找到的元素或 null
@@ -363,34 +319,13 @@ export function findElementInRendition(
 
       const element = findElementByXPath(xpath, doc)
       if (element) {
-        console.log('✅ XPath 定位成功:', xpath, '->', element.tagName)
         return element
       }
     }
-
-    console.group('❌ XPath 定位失败')
-    console.error('XPath:', xpath)
-    console.error('Rendition 状态:', rendition ? '已加载' : '未加载')
-    console.error('可能原因:')
-    console.error('  1. XPath 与 iframe DOM 结构不匹配')
-    console.error('  2. 元素不在当前页面')
-    console.error('建议: 检查 XPath 生成逻辑或使用 CFI 跨页跳转')
-    console.groupEnd()
 
     return null
   } catch (error) {
     console.error('findElementInRendition: 查找失败', error)
     return null
   }
-}
-
-/**
- * 滚动到元素位置
- * @param element - DOM 元素
- */
-export function scrollToElement(element: Element): void {
-  element.scrollIntoView({
-    behavior: 'smooth',
-    block: 'center'
-  })
 }
