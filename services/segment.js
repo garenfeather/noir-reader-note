@@ -7,6 +7,7 @@ const { JSDOM } = require('jsdom')
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
+const EpubCFI = require('epubcfi')
 
 // 使用 Node.js crypto 生成 UUID
 function uuidv4() {
@@ -280,6 +281,39 @@ class SegmentService {
     }
 
     return parts
+  }
+
+  /**
+   * 为 DOM 元素生成 CFI Range
+   * @param {Element} element - 段落元素
+   * @param {Document} document - jsdom 的 document 对象
+   * @returns {string|null} CFI Range 字符串或 null（失败时）
+   */
+  generateCFI(element, document) {
+    try {
+      if (!element || !document) {
+        console.warn('generateCFI: 缺少必要参数')
+        return null
+      }
+
+      // 创建 Range 对象
+      const range = document.createRange()
+
+      // 选择元素的所有内容
+      range.selectNodeContents(element)
+
+      // 使用 epubcfi 生成 CFI
+      const cfi = new EpubCFI()
+      const cfiRange = cfi.generateCfiFromRange(range, document)
+
+      return cfiRange || null
+    } catch (error) {
+      console.warn('generateCFI: 生成 CFI 失败', {
+        tagName: element?.tagName,
+        error: error.message
+      })
+      return null
+    }
   }
 }
 

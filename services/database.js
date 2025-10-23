@@ -6,6 +6,9 @@
 const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs')
+const { JSDOM } = require('jsdom')
+const segmentService = require('./segment')
+const projectService = require('./project')
 
 class DatabaseService {
   constructor() {
@@ -202,8 +205,14 @@ class DatabaseService {
   /**
    * 保存分段数据（批量）
    * 分段文本通过xpath从XHTML动态读取，不存储在数据库中
+   * 保存前生成 CFI Range
    */
   saveSegments(projectId, segments) {
+    console.log(`开始保存 segments，共 ${segments.length} 个`)
+
+    // 在保存前生成 CFI
+    this.generateCFIForSegments(projectId, segments)
+
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
       (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length)
@@ -236,6 +245,102 @@ class DatabaseService {
     } catch (error) {
       console.error('保存分段失败:', error)
       throw error
+    }
+  }
+
+  /**
+   * 为 segments 生成 CFI Range
+   * 按章节分组，避免重复加载 XHTML
+   * @param {string} projectId - 项目ID
+   * @param {Array} segments - 分段数组
+   */
+  generateCFIForSegments(projectId, segments) {
+    try {
+      // 获取项目解压路径
+      const project = this.getProject(projectId)
+      if (!project) {
+        console.warn('generateCFIForSegments: 项目不存在', projectId)
+        return
+      }
+
+      const extractedPath = projectService.getExtractedPath(projectId)
+
+      // 按章节分组
+      const segmentsByChapter = segments.reduce((acc, segment) => {
+        const key = segment.chapterHref
+        if (!acc[key]) {
+          acc[key] = []
+        }
+        acc[key].push(segment)
+        return acc
+      }, {})
+
+      let successCount = 0
+      let failCount = 0
+
+      // 遍历每个章节
+      for (const [chapterHref, chapterSegments] of Object.entries(segmentsByChapter)) {
+        try {
+          // 构建 XHTML 文件路径
+          const xhtmlPath = path.join(extractedPath, chapterHref)
+
+          if (!fs.existsSync(xhtmlPath)) {
+            console.warn(`generateCFIForSegments: XHTML 文件不存在: ${xhtmlPath}`)
+            failCount += chapterSegments.length
+            continue
+          }
+
+          // 读取并解析 XHTML
+          const html = fs.readFileSync(xhtmlPath, 'utf-8')
+          const dom = new JSDOM(html, { contentType: 'text/html' })
+          const document = dom.window.document
+
+          // 为该章节的每个 segment 生成 CFI
+          for (const segment of chapterSegments) {
+            try {
+              // 通过 XPath 找到元素
+              const element = segmentService.getElementByXPath(document, segment.xpath)
+
+              if (element) {
+                // 生成 CFI
+                const cfiRange = segmentService.generateCFI(element, document)
+                if (cfiRange) {
+                  segment.cfiRange = cfiRange
+                  successCount++
+                } else {
+                  segment.cfiRange = null
+                  failCount++
+                }
+              } else {
+                console.warn('generateCFIForSegments: 未找到元素', {
+                  xpath: segment.xpath,
+                  chapterHref: segment.chapterHref
+                })
+                segment.cfiRange = null
+                failCount++
+              }
+            } catch (error) {
+              console.warn('generateCFIForSegments: 生成 CFI 失败', {
+                segmentId: segment.id,
+                error: error.message
+              })
+              segment.cfiRange = null
+              failCount++
+            }
+          }
+        } catch (error) {
+          console.error('generateCFIForSegments: 处理章节失败', {
+            chapterHref,
+            error: error.message
+          })
+          failCount += chapterSegments.length
+        }
+      }
+
+      console.log(`CFI 生成完成: 成功 ${successCount} 个，失败 ${failCount} 个`)
+    } catch (error) {
+      console.error('generateCFIForSegments: 生成 CFI 失败', error)
+      // 不抛出异常，允许继续保存（CFI 为 null）
     }
   }
 
