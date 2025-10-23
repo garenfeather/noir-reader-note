@@ -284,6 +284,33 @@ class SegmentService {
   }
 
   /**
+   * 获取元素中的第一个和最后一个文本节点
+   */
+  getFirstAndLastTextNode(element) {
+    const walker = element.ownerDocument.createTreeWalker(
+      element,
+      element.ownerDocument.defaultView.NodeFilter.SHOW_TEXT,
+      null
+    )
+
+    let firstTextNode = null
+    let lastTextNode = null
+    let currentNode
+
+    while ((currentNode = walker.nextNode())) {
+      // 跳过空白文本节点
+      if (currentNode.textContent.trim().length > 0) {
+        if (!firstTextNode) {
+          firstTextNode = currentNode
+        }
+        lastTextNode = currentNode
+      }
+    }
+
+    return { firstTextNode, lastTextNode }
+  }
+
+  /**
    * 为 DOM 元素生成 CFI Range
    * @param {Element} element - 段落元素
    * @param {string} cfiBase - CFI 基础路径，例如：/6/8[c1_1t.xhtml]
@@ -309,9 +336,27 @@ class SegmentService {
         return null
       }
 
-      // 创建 Range 对象，包含整个元素的内容
+      // 获取元素中的第一个和最后一个文本节点
+      const { firstTextNode, lastTextNode } = this.getFirstAndLastTextNode(element)
+
+      if (!firstTextNode || !lastTextNode) {
+        // 空段落（没有文本内容）是正常的，不需要警告
+        console.log('generateCFI: 跳过空段落（无文本节点）')
+        return null
+      }
+
+      // 创建 Range 对象，从第一个文本节点的开始到最后一个文本节点的结束
       const range = document.createRange()
-      range.selectNodeContents(element)
+      range.setStart(firstTextNode, 0)
+      range.setEnd(lastTextNode, lastTextNode.textContent.length)
+
+      console.log('📍 Range 信息:', {
+        collapsed: range.collapsed,
+        startContainer: firstTextNode.textContent.substring(0, 20),
+        endContainer: lastTextNode.textContent.substring(0, 20),
+        startOffset: 0,
+        endOffset: lastTextNode.textContent.length
+      })
 
       // 正确的用法：传入 Range 和 cfiBase 字符串
       const cfiInstance = new EpubCFI(range, cfiBase)
@@ -325,6 +370,7 @@ class SegmentService {
           console.warn('⚠️ CFI 仍然是无效格式（包含 /!）:', cfiString)
           return null
         }
+        console.log('✅ 生成的 CFI:', cfiString.substring(0, 100) + '...')
         return cfiString
       } else {
         console.warn('⚠️ CFI 生成返回无效格式:', cfiString)
