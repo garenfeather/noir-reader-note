@@ -284,6 +284,33 @@ class SegmentService {
   }
 
   /**
+   * 获取元素中的第一个和最后一个文本节点
+   */
+  getFirstAndLastTextNode(element) {
+    const walker = element.ownerDocument.createTreeWalker(
+      element,
+      element.ownerDocument.defaultView.NodeFilter.SHOW_TEXT,
+      null
+    )
+
+    let firstTextNode = null
+    let lastTextNode = null
+    let currentNode
+
+    while ((currentNode = walker.nextNode())) {
+      // 跳过空白文本节点
+      if (currentNode.textContent.trim().length > 0) {
+        if (!firstTextNode) {
+          firstTextNode = currentNode
+        }
+        lastTextNode = currentNode
+      }
+    }
+
+    return { firstTextNode, lastTextNode }
+  }
+
+  /**
    * 为 DOM 元素生成 CFI Range
    * @param {Element} element - 段落元素
    * @param {string} cfiBase - CFI 基础路径，例如：/6/8[c1_1t.xhtml]
@@ -309,9 +336,19 @@ class SegmentService {
         return null
       }
 
-      // 创建 Range 对象，包含整个元素的内容
+      // 获取元素中的第一个和最后一个文本节点
+      const { firstTextNode, lastTextNode } = this.getFirstAndLastTextNode(element)
+
+      if (!firstTextNode || !lastTextNode) {
+        // 空段落（没有文本内容）是正常的，不需要警告
+        console.log('generateCFI: 跳过空段落（无文本节点）')
+        return null
+      }
+
+      // 创建 Range 对象，从第一个文本节点的开始到最后一个文本节点的结束
       const range = document.createRange()
-      range.selectNodeContents(element)
+      range.setStart(firstTextNode, 0)
+      range.setEnd(lastTextNode, lastTextNode.textContent.length)
 
       // 正确的用法：传入 Range 和 cfiBase 字符串
       const cfiInstance = new EpubCFI(range, cfiBase)
@@ -322,7 +359,7 @@ class SegmentService {
       if (cfiString && cfiString.startsWith('epubcfi(')) {
         // 验证 CFI 格式正确且包含 spine 路径
         if (cfiString.includes('epubcfi(/!/')) {
-          console.warn('⚠️ CFI 仍然是无效格式（包含 /!）:', cfiString)
+          console.warn('⚠️ CFI 格式无效（缺少 spine 路径）:', cfiString)
           return null
         }
         return cfiString

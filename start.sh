@@ -21,13 +21,25 @@ echo -e "${YELLOW}ReadTranslate 完整启动脚本${NC}"
 echo -e "${YELLOW}========================================${NC}\n"
 
 echo -e "${YELLOW}[1/4] 停止现有服务...${NC}"
+
+# 停止 npm/vite 相关进程
 pids=$(pgrep -f "npm run electron:dev|concurrently|vite|wait-on http://localhost" 2>/dev/null || true)
 if [ -n "$pids" ]; then
   echo "$pids" | xargs kill -9 2>/dev/null || true
-  echo -e "${GREEN}✓ 已停止现有进程${NC}"
+  echo -e "${GREEN}✓ 已停止 npm/vite 进程${NC}"
 fi
+
+# 停止所有 Electron 进程
+electron_pids=$(pgrep -i "Electron" 2>/dev/null || true)
+if [ -n "$electron_pids" ]; then
+  echo "$electron_pids" | xargs kill -9 2>/dev/null || true
+  echo -e "${GREEN}✓ 已停止 Electron 进程${NC}"
+fi
+
+# 释放端口
 lsof -i :${VITE_PORT} 2>/dev/null | grep -v COMMAND | awk '{print $2}' | xargs kill -9 2>/dev/null || true
 echo -e "${GREEN}✓ 已释放端口 ${VITE_PORT}${NC}"
+
 sleep 2
 
 echo -e "\n${YELLOW}[2/4] 验证开发环境...${NC}"

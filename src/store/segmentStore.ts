@@ -36,10 +36,6 @@ interface SegmentState {
 
   // Actions
   setSegments: (segments: Segment[]) => void
-  addSegment: (segment: Segment) => void
-  updateSegment: (id: string, updates: Partial<Segment>) => void
-  removeSegment: (id: string) => void
-  splitSegment: (segmentId: string, newSegments: Segment[]) => void
   setHoveredSegment: (id: string | null) => void
   setSelectedSegment: (id: string | null) => void
   setLoading: (loading: boolean) => void
@@ -64,39 +60,6 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
   isEditMode: false,
 
   setSegments: (segments) => {
-    const visibleSegments = segments.filter(s => !s.isEmpty)
-    set({ segments, visibleSegments })
-  },
-
-  addSegment: (segment) => {
-    const segments = [...get().segments, segment]
-    const visibleSegments = segments.filter(s => !s.isEmpty)
-    set({ segments, visibleSegments })
-  },
-
-  updateSegment: (id, updates) => {
-    const segments = get().segments.map(s =>
-      s.id === id ? { ...s, ...updates } : s
-    )
-    const visibleSegments = segments.filter(s => !s.isEmpty)
-    set({ segments, visibleSegments })
-  },
-
-  removeSegment: (id) => {
-    const segments = get().segments.filter(s => s.id !== id)
-    const visibleSegments = segments.filter(s => !s.isEmpty)
-    set({ segments, visibleSegments })
-  },
-
-  splitSegment: (segmentId, newSegments) => {
-    const segments = get().segments.reduce((acc, segment) => {
-      if (segment.id === segmentId) {
-        // 替换为新分段
-        return [...acc, ...newSegments]
-      }
-      return [...acc, segment]
-    }, [] as Segment[])
-
     const visibleSegments = segments.filter(s => !s.isEmpty)
     set({ segments, visibleSegments })
   },

@@ -207,17 +207,10 @@ class DatabaseService {
    * 保存前生成 CFI Range
    */
   saveSegments(projectId, segments) {
-    console.log('==========================================')
-    console.log('🚨 DATABASE.JS: saveSegments 被调用!')
     console.log(`开始保存 segments，共 ${segments.length} 个`)
-    console.log('projectId:', projectId)
-    console.log('第一个segment:', segments[0])
-    console.log('==========================================')
 
     // 在保存前生成 CFI（使用 OPF 文件获取 spine 信息）
-    console.log('⏰ 准备调用 generateCFIForSegments...')
     this.generateCFIForSegments(projectId, segments)
-    console.log('⏰ generateCFIForSegments 调用完成')
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
@@ -307,10 +300,7 @@ class DatabaseService {
         }
       })
 
-      console.log('✅ OPF 解析完成:', {
-        spineNodeIndex,
-        spineItems: Object.keys(spineMap).length
-      })
+      console.log(`✅ OPF 解析完成，spine包含 ${Object.keys(spineMap).length} 个章节`)
 
       return { spineNodeIndex, spineMap }
     } catch (error) {
@@ -416,15 +406,10 @@ class DatabaseService {
             continue
           }
 
-          console.log('✅ XHTML 文件存在，开始读取...')
-
           // 读取并解析 XHTML
           const html = fs.readFileSync(xhtmlPath, 'utf-8')
-          console.log('📝 HTML 长度:', html.length)
-
           const dom = new JSDOM(html, { contentType: 'text/html' })
           const document = dom.window.document
-          console.log('🌐 DOM 创建成功')
 
           // 根据 chapterHref 查找 spine 信息
           let spineInfo = null
@@ -443,7 +428,6 @@ class DatabaseService {
 
           // 生成 cfiBase
           const cfiBase = this.generateCFIBase(spineNodeIndex, spineInfo.index, spineInfo.id)
-          console.log(`📍 cfiBase: ${cfiBase}`)
 
           // 为该章节的每个 segment 生成 CFI
           let chapterSuccessCount = 0
@@ -455,8 +439,6 @@ class DatabaseService {
               const element = segmentService.getElementByXPath(document, segment.xpath)
 
               if (element) {
-                console.log(`  🔍 找到元素: ${segment.xpath} -> ${element.tagName}`)
-
                 // 生成 CFI（传入 cfiBase）
                 const cfiRange = segmentService.generateCFI(element, cfiBase)
 
@@ -464,12 +446,10 @@ class DatabaseService {
                   segment.cfiRange = cfiRange
                   successCount++
                   chapterSuccessCount++
-                  console.log(`  ✅ CFI 生成成功: ${cfiRange.substring(0, 60)}...`)
                 } else {
                   segment.cfiRange = null
                   failCount++
                   chapterFailCount++
-                  console.warn(`  ⚠️ CFI 生成返回 null`)
                 }
               } else {
                 console.error(`  ❌ 未找到元素: ${segment.xpath}`)
@@ -478,11 +458,7 @@ class DatabaseService {
                 chapterFailCount++
               }
             } catch (error) {
-              console.error(`  ❌ 异常:`, {
-                segmentId: segment.id,
-                error: error.message,
-                stack: error.stack
-              })
+              console.error(`  ❌ 生成CFI异常:`, error.message)
               segment.cfiRange = null
               failCount++
               chapterFailCount++

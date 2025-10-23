@@ -78,8 +78,12 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
     if (hoveredSegmentId) {
       const segment = visibleSegments.find(s => s.id === hoveredSegmentId)
       if (segment) {
-        applyHoverHighlight(targetRendition, segment.cfiRange, segment.xpath)
-        hoverHighlightCfi.current = segment.cfiRange || null
+        const appliedCFI = applyHoverHighlight(
+          targetRendition,
+          segment.cfiRange,
+          segment.xpath
+        )
+        hoverHighlightCfi.current = appliedCFI
       }
     }
 
@@ -153,22 +157,25 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
       return
     }
 
-    // 获取有效的 CFI
-    // 检查 CFI 是否有效（不是主进程生成的无效格式）
-    const isInvalidCFI = segment.cfiRange && segment.cfiRange.includes('epubcfi(/!/')
+    const rawCFI = segment.cfiRange
+    const hasCFI = !!rawCFI
+    const isInvalidCFI = rawCFI ? rawCFI.includes('epubcfi(/!/') : false
 
-    let cfi = segment.cfiRange
+    if (!hasCFI) {
+      console.debug('handleCardClick: 缺少 CFI，跳过阅读区域跳转', {
+        id: segment.id,
+        xpath: segment.xpath
+      })
+      setHoveredSegment(null)
+      setSelectedSegment(segment.id)
+      return
+    }
 
-    if (isInvalidCFI || !cfi) {
-      // CFI 无效或不存在，从 XPath 生成
-      if (segment.xpath) {
-        if (isInvalidCFI) {
-          console.log('⚠️ CFI 无效，从 XPath 重新生成:', segment.cfiRange)
-        } else {
-          console.log('⏳ CFI 缺失，从 XPath 生成...', segment.xpath)
-        }
-        cfi = generateCFIFromXPath(segment.xpath, targetRendition)
-      }
+    let cfi: string | null | undefined = rawCFI
+
+    if (isInvalidCFI && segment.xpath) {
+      console.log('⚠️ CFI 无效，从 XPath 重新生成:', rawCFI)
+      cfi = generateCFIFromXPath(segment.xpath, targetRendition)
     }
 
     if (!cfi) {
@@ -178,7 +185,7 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
         xpath: segment.xpath,
         isInvalid: isInvalidCFI
       })
-      // 仍然进入详情页
+      setHoveredSegment(null)
       setSelectedSegment(segment.id)
       return
     }
