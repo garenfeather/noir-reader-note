@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Layout, Button, Space, message, Modal } from 'antd'
-import { FileTextOutlined, CloseOutlined, ScissorOutlined } from '@ant-design/icons'
+import { FileTextOutlined, CloseOutlined } from '@ant-design/icons'
 import ProjectList, { ProjectListItem } from './ProjectList'
 import TableOfContents from './TableOfContents'
 import ContentViewer from './ContentViewer'
@@ -286,53 +286,6 @@ function MainLayout() {
     }
   }
 
-  // 分割当前章节
-  const handleSegment = async () => {
-    if (!currentProject) {
-      message.error('项目未初始化，请重新切换到翻译模式')
-      return
-    }
-
-    if (!currentChapterId || !currentChapterHref) {
-      message.error('请先选择一个章节')
-      return
-    }
-
-    try {
-      setLoading(true)
-      message.loading('正在分析段落...', 0)
-
-      const result = await window.electronAPI.parseSegments(
-        currentProject.id,
-        currentChapterId,
-        currentChapterHref
-      )
-
-      message.destroy()
-      setLoading(false)
-
-      if (result.success && result.data) {
-        setSegments(result.data.segments)
-        setParsed(true)
-        setEditMode(true) // 分割完成后进入编辑模式
-        setHasUnsavedChanges(true)
-        message.success(`分析完成，找到 ${result.data.totalCount} 个段落`)
-        console.log('分段结果:', result.data)
-      } else {
-        message.error('分析失败: ' + result.error)
-        setParsed(false)
-        setHasUnsavedChanges(false)
-      }
-    } catch (error) {
-      message.destroy()
-      setLoading(false)
-      console.error('分段失败:', error)
-      message.error('分段失败')
-      setParsed(false)
-      setHasUnsavedChanges(false)
-    }
-  }
-
   // 关闭文件
   const handleCloseFile = () => {
     if (!epubData) return
@@ -490,21 +443,9 @@ function MainLayout() {
           <Button onClick={handleCloseFile} disabled={!epubData}>
             关闭
           </Button>
-          <Button onClick={toggleMode}>
-            {mode === 'read' ? '编辑' : '只读'}
+          <Button type="primary" onClick={toggleMode}>
+            {mode === 'read' ? '编辑' : '阅读'}
           </Button>
-
-          {/* 分割按钮：只在翻译模式下显示 */}
-          {mode === 'translate' && (
-            <Button
-              type="primary"
-              icon={<ScissorOutlined />}
-              onClick={handleSegment}
-              disabled={!currentProject || !currentChapterId}
-            >
-              分割
-            </Button>
-          )}
 
           {/* 附注按钮：只在只读模式下显示 */}
           {mode === 'read' && epubData && (

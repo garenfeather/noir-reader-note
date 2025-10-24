@@ -123,16 +123,16 @@ function isValidCFI(cfi: string | null | undefined): boolean {
 
 /**
  * 悬停高亮: 使用 epub.js 注解 API
- * 优先使用 cfiRange，如果无效则从 xpath 动态生成
+ * 仅在存在有效或可恢复的 CFI 时触发，避免无 CFI 时误操作
  */
 export function applyHoverHighlight(
   rendition: Rendition | null,
   cfiRange: string | null | undefined,
   xpath?: string
-): void {
+): string | null {
   if (!rendition) {
     console.warn('applyHoverHighlight: rendition 为 null')
-    return
+    return null
   }
 
   // 检查 CFI 是否有效
@@ -140,23 +140,24 @@ export function applyHoverHighlight(
 
   if (isValidCFI(cfiRange)) {
     actualCFI = cfiRange!
-  } else if (xpath) {
+  } else if (cfiRange && xpath) {
     // CFI 无效或不存在，从 XPath 生成
     if (cfiRange) {
       console.log('⚠️ 数据库中的 CFI 无效，从 XPath 重新生成:', cfiRange)
-    } else {
-      console.log('⏳ CFI 不存在，从 XPath 生成...', xpath)
     }
     actualCFI = generateCFIFromXPath(xpath, rendition)
+  } else if (!cfiRange) {
+    console.debug('applyHoverHighlight: 缺少 CFI，跳过阅读区域高亮')
+    return null
   }
 
   if (!actualCFI) {
     console.warn('applyHoverHighlight: 无法获取有效的 CFI', { cfiRange, xpath })
-    return
+    return null
   }
 
   const annotations = getAnnotations(rendition)
-  if (!annotations) return
+  if (!annotations) return null
 
   try {
     // 先移除可能存在的旧高亮
@@ -171,8 +172,10 @@ export function applyHoverHighlight(
     })
 
     console.log('✅ 悬停高亮已应用:', actualCFI, '返回值:', mark)
+    return actualCFI
   } catch (error) {
     console.error('❌ 悬停高亮失败:', actualCFI, error)
+    return null
   }
 }
 
@@ -217,14 +220,15 @@ export function flashHighlight(
 
   if (isValidCFI(cfiRange)) {
     actualCFI = cfiRange!
-  } else if (xpath) {
+  } else if (cfiRange && xpath) {
     // CFI 无效或不存在，从 XPath 生成
     if (cfiRange) {
       console.log('⚠️ 数据库中的 CFI 无效，从 XPath 重新生成 (闪烁):', cfiRange)
-    } else {
-      console.log('⏳ CFI 不存在，从 XPath 生成 (闪烁)...', xpath)
     }
     actualCFI = generateCFIFromXPath(xpath, rendition)
+  } else if (!cfiRange) {
+    console.debug('flashHighlight: 缺少 CFI，跳过闪烁高亮')
+    return () => {}
   }
 
   if (!actualCFI) {
