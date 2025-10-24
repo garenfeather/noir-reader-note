@@ -4,7 +4,7 @@
  */
 
 import { List, Spin, Empty, Button, Space } from 'antd'
-import { CheckOutlined, CloseOutlined, EditOutlined } from '@ant-design/icons'
+import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined } from '@ant-design/icons'
 import { useEffect, useRef, useCallback } from 'react'
 import { useSegmentStore } from '../store/segmentStore'
 import { useBookStore } from '../store/bookStore'
@@ -21,11 +21,15 @@ import {
 interface Props {
   onAccept: () => void
   onDiscard: () => void
+  onCancel: () => void
+  onResegment: () => void
+  onSegment: () => void
   allowEditing: boolean
   mode: 'read' | 'translate'
+  hasPersisted: boolean // 当前章节是否有持久化的分割结果
 }
 
-function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
+function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, allowEditing, mode, hasPersisted }: Props) {
   const {
     visibleSegments,
     hoveredSegmentId,
@@ -118,10 +122,30 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
     setEditMode(false) // 退出编辑模式
   }
 
+  // 处理取消
+  const handleCancel = () => {
+    if (!allowEditing) return
+    onCancel()
+    setEditMode(false) // 退出编辑模式
+  }
+
+  // 处理重新分割
+  const handleResegment = () => {
+    if (!allowEditing) return
+    onResegment()
+    // 保持编辑模式，不退出
+  }
+
   // 处理编辑
   const handleEdit = () => {
     if (!allowEditing) return
     setEditMode(true) // 进入编辑模式
+  }
+
+  // 处理分割
+  const handleSegment = () => {
+    if (!allowEditing) return
+    onSegment()
   }
 
   const triggerFlashHighlight = useCallback((segment: typeof visibleSegments[0]) => {
@@ -259,16 +283,39 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Spin tip="正在分析段落..." />
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <Spin size="large" />
+        <div className="text-gray-500">正在分析段落...</div>
       </div>
     )
   }
 
+  // 如果没有解析或没有段落，显示空状态和底部按钮
   if (!isParsed || visibleSegments.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Empty description={mode === 'translate' ? '点击「分割」按钮开始分段' : '当前章节暂无附注'} />
+      <div className="h-full flex flex-col">
+        {/* 空状态提示 */}
+        <div className="flex-1 flex items-center justify-center">
+          <Empty description={mode === 'translate' ? '点击底部「分割」按钮开始分段' : '当前章节暂无附注'} />
+        </div>
+
+        {/* 底部操作按钮 */}
+        {allowEditing && !isParsed && (
+          <div className="border-t border-gray-200 p-4 bg-white">
+            <div className="w-full flex justify-center">
+              {!hasPersisted && (
+                // 无持久化结果：显示分割按钮
+                <Button
+                  type="primary"
+                  icon={<ScissorOutlined />}
+                  onClick={handleSegment}
+                >
+                  分割
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -313,32 +360,69 @@ function SegmentList({ onAccept, onDiscard, allowEditing, mode }: Props) {
         </div>
         {allowEditing && (
           isEditMode ? (
-            // 编辑模式：显示接受/丢弃按钮
-            <Space className="w-full justify-center" direction="horizontal" size="middle">
-              <Button
-                type="primary"
-                icon={<CheckOutlined />}
-                onClick={handleAccept}
-              >
-                接受
-              </Button>
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                onClick={handleDiscard}
-              >
-                丢弃
-              </Button>
-            </Space>
+            hasPersisted ? (
+              // 编辑模式 + 已有持久化结果：显示接受/取消/重新分割按钮
+              <Space className="w-full justify-center" direction="horizontal" size="small">
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  onClick={handleAccept}
+                >
+                  接受
+                </Button>
+                <Button
+                  icon={<RollbackOutlined />}
+                  onClick={handleCancel}
+                >
+                  取消
+                </Button>
+                <Button
+                  icon={<ScissorOutlined />}
+                  onClick={handleResegment}
+                >
+                  重新分割
+                </Button>
+              </Space>
+            ) : (
+              // 编辑模式 + 首次分割：显示接受/丢弃按钮
+              <Space className="w-full justify-center" direction="horizontal" size="middle">
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  onClick={handleAccept}
+                >
+                  接受
+                </Button>
+                <Button
+                  danger
+                  icon={<CloseOutlined />}
+                  onClick={handleDiscard}
+                >
+                  丢弃
+                </Button>
+              </Space>
+            )
           ) : (
-            // 非编辑模式：显示编辑按钮
+            // 非编辑模式：根据是否有持久化结果显示不同按钮
             <div className="w-full flex justify-center">
-              <Button
-                icon={<EditOutlined />}
-                onClick={handleEdit}
-              >
-                编辑
-              </Button>
+              {hasPersisted ? (
+                // 有持久化结果：显示编辑附注按钮
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={handleEdit}
+                >
+                  编辑附注
+                </Button>
+              ) : (
+                // 无持久化结果：显示分割按钮
+                <Button
+                  type="primary"
+                  icon={<ScissorOutlined />}
+                  onClick={handleSegment}
+                >
+                  分割
+                </Button>
+              )}
             </div>
           )
         )}
