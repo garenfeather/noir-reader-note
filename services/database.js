@@ -53,7 +53,7 @@ class DatabaseService {
     `)
 
     // 创建分段表
-    // 分段文本通过xpath从XHTML动态读取，不存储在数据库中
+    // 新增字段支持译文和附注功能
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS segments (
         id TEXT PRIMARY KEY,
@@ -62,11 +62,15 @@ class DatabaseService {
         chapter_href TEXT NOT NULL,
         xpath TEXT NOT NULL,
         cfi_range TEXT,
-        position INTEGER NOT NULL,
+        position REAL NOT NULL,
         is_empty BOOLEAN DEFAULT 0,
         parent_segment_id TEXT,
         preview TEXT,
         text_length INTEGER DEFAULT 0,
+        original_text TEXT,
+        translated_text TEXT,
+        notes TEXT,
+        is_modified INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )
@@ -203,7 +207,7 @@ class DatabaseService {
 
   /**
    * 保存分段数据（批量）
-   * 分段文本通过xpath从XHTML动态读取，不存储在数据库中
+   * 支持译文和附注功能
    * 保存前生成 CFI Range
    */
   saveSegments(projectId, segments) {
@@ -214,13 +218,16 @@ class DatabaseService {
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
-      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length, original_text, translated_text, notes, is_modified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     // 使用事务确保数据一致性
     const transaction = this.db.transaction((segments) => {
       for (const segment of segments) {
+        // 将 notes 数组转换为 JSON 字符串
+        const notesJSON = segment.notes ? JSON.stringify(segment.notes) : null
+
         stmt.run(
           segment.id,
           projectId,
@@ -232,7 +239,11 @@ class DatabaseService {
           segment.isEmpty ? 1 : 0,
           segment.parentSegmentId || null,
           segment.preview || null,
-          segment.textLength || 0
+          segment.textLength || 0,
+          segment.originalText || null,
+          segment.translatedText || null,
+          notesJSON,
+          segment.isModified ? 1 : 0
         )
       }
     })
@@ -486,12 +497,13 @@ class DatabaseService {
 
   /**
    * 加载章节的分段数据
-   * 分段文本通过xpath从XHTML动态读取，不从数据库返回
+   * 包含译文和附注信息
    */
   loadSegments(projectId, chapterId) {
     const stmt = this.db.prepare(`
       SELECT id, project_id, chapter_id, chapter_href, xpath, cfi_range, position,
-             is_empty, parent_segment_id, preview, text_length, created_at
+             is_empty, parent_segment_id, preview, text_length, created_at,
+             original_text, translated_text, notes, is_modified
       FROM segments
       WHERE project_id = ? AND chapter_id = ?
       ORDER BY position ASC
@@ -512,7 +524,11 @@ class DatabaseService {
         parentSegmentId: row.parent_segment_id,
         preview: row.preview,
         textLength: row.text_length,
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        originalText: row.original_text,
+        translatedText: row.translated_text,
+        notes: row.notes ? JSON.parse(row.notes) : null,
+        isModified: row.is_modified === 1
       }))
     } catch (error) {
       console.error('加载分段失败:', error)
