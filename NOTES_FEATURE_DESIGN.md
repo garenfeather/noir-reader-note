@@ -53,9 +53,67 @@ sourceText: string
 
 ---
 
-## 二、界面设计
+## 二、段落编号与排序规则
 
-### 2.1 附注列表（SegmentList - 编辑模式）
+### 2.1 position 字段的用途
+
+**数据库层面：**
+- `position` 字段**仅用于排序**
+- 查询段落时使用 `ORDER BY position ASC`
+- 删除段落时**不更新**其他段落的 position
+- position 可能出现跳号（如：1, 2, 4, 5...）
+
+**设计原因：**
+- 简化删除逻辑，无需批量更新
+- 为将来的手动拆分、插入功能预留空间（可用小数：2.5, 2.25 等）
+- position 是技术属性，用户不直接看到
+
+### 2.2 界面显示编号
+
+**界面层面：**
+- 显示的编号是**实时计算**的（数组索引 + 1）
+- 始终保持**连续**（1, 2, 3, 4...）
+- 删除段落后，后续编号自动递减
+
+**实现方式：**
+```typescript
+// 数据库查询（按 position 排序）
+const segments = await db.query(`
+  SELECT * FROM segments
+  WHERE chapter_id = ?
+  ORDER BY position ASC
+`)
+
+// 界面显示（实时计算编号）
+segments.map((segment, index) => {
+  const displayNumber = index + 1  // 界面编号：1, 2, 3...
+  return <SegmentCard number={displayNumber} segment={segment} />
+})
+```
+
+### 2.3 示例场景
+
+**初始状态：**
+```
+数据库 position:  1    2    3    4    5
+界面显示编号:     #1   #2   #3   #4   #5
+```
+
+**删除段落3后：**
+```
+数据库 position:  1    2    4    5
+界面显示编号:     #1   #2   #3   #4
+```
+- position 不变，只是少了3
+- 界面重新计算，保持连续
+
+**重要：** 不要用界面编号作为永久引用，应使用 `segment.id`
+
+---
+
+## 三、界面设计
+
+### 3.1 附注列表（SegmentList - 编辑模式）
 
 **布局：**
 ```
@@ -73,7 +131,7 @@ sourceText: string
 
 ---
 
-### 2.2 附注详情页（SegmentDetail - 编辑模式）
+### 3.2 附注详情页（SegmentDetail - 编辑模式）
 
 **展示顺序：译文 → 附注条目 → 原文**
 
@@ -130,7 +188,7 @@ sourceText: string
 
 ---
 
-### 2.3 附注条目组件（NoteItem）
+### 3.3 附注条目组件（NoteItem）
 
 **两种状态：**
 
@@ -164,14 +222,14 @@ sourceText: string
 
 ---
 
-## 三、功能流程
+## 四、功能流程
 
-### 3.1 翻译流程
+### 4.1 翻译流程
 
 **触发：** 点击详情页底部"翻译"按钮
 
 **步骤：**
-1. 获取当前段落的 `originalText`（如果有 `customText` 则用 `customText`）
+1. 获取当前段落的 `originalText`
 2. 显示加载状态："正在翻译..."
 3. 调用翻译函数（临时Mock实现）
 4. 接收返回的 `{ translatedText, notes }`
@@ -191,7 +249,7 @@ sourceText: string
 
 ---
 
-### 3.2 编辑译文流程
+### 4.2 编辑译文流程
 
 **触发：** 用户在译文框中修改内容
 
@@ -202,7 +260,7 @@ sourceText: string
 
 ---
 
-### 3.3 新增附注流程
+### 4.3 新增附注流程
 
 **触发：** 点击 [+] 按钮
 
@@ -224,7 +282,7 @@ sourceText: string
 
 ---
 
-### 3.4 编辑已有附注流程
+### 4.4 编辑已有附注流程
 
 **触发：** 修改附注内容
 
@@ -243,7 +301,7 @@ sourceText: string
 
 ---
 
-### 3.5 删除附注流程
+### 4.5 删除附注流程
 
 **A. 列表中删除整个段落**
 
@@ -254,7 +312,8 @@ sourceText: string
 2. 用户确认
 3. 调用 API 从数据库硬删除（DELETE）
 4. 删除成功 → 刷新列表，移除该段落
-5. 更新后续段落的 `position`（可选，取决于是否需要填补空缺）
+5. **不更新其他段落的 `position`**（position 保持不变，用于排序）
+6. 界面显示编号自动重新计算（基于数组索引）
 
 **B. 详情页删除单条附注**
 
@@ -267,7 +326,7 @@ sourceText: string
 
 ---
 
-### 3.6 保存流程
+### 4.6 保存流程
 
 **触发：** 点击详情页底部"保存"按钮
 
@@ -284,7 +343,7 @@ sourceText: string
 
 ---
 
-### 3.7 修改检测逻辑
+### 4.7 修改检测逻辑
 
 **判断是否有修改：**
 - 译文被修改（`translatedText` ≠ 初始值）
@@ -310,9 +369,9 @@ sourceText: string
 
 ---
 
-## 四、组件修改清单
+## 五、组件修改清单
 
-### 4.1 新建组件
+### 5.1 新建组件
 
 **A. NoteItem.tsx**
 - 单个附注条目组件
@@ -345,7 +404,7 @@ sourceText: string
 
 ---
 
-### 4.2 修改现有组件
+### 5.2 修改现有组件
 
 **A. SegmentList.tsx**
 - 编辑模式下，每个 SegmentCard 右侧显示"删除"按钮
@@ -367,9 +426,9 @@ sourceText: string
 
 ---
 
-## 五、API接口定义
+## 六、API接口定义
 
-### 5.1 翻译接口（临时Mock）
+### 6.1 翻译接口（临时Mock）
 
 **Electron Main 进程：**
 
@@ -384,7 +443,7 @@ electronAPI.translateSegment(sourceText: string)
 
 ---
 
-### 5.2 保存附注接口
+### 6.2 保存附注接口
 
 **Electron Main 进程：**
 
@@ -403,7 +462,7 @@ electronAPI.saveSegmentNotes(segmentId: string, data: {
 
 ---
 
-### 5.3 删除段落接口
+### 6.3 删除段落接口
 
 **Electron Main 进程：**
 
@@ -418,7 +477,7 @@ electronAPI.deleteSegment(segmentId: string)
 
 ---
 
-### 5.4 加载段落完整信息接口
+### 6.4 加载段落完整信息接口
 
 **修改现有的 `loadSegments` 接口，确保返回：**
 - `originalText`
@@ -427,13 +486,13 @@ electronAPI.deleteSegment(segmentId: string)
 
 ---
 
-## 六、状态管理
+## 七、状态管理
 
-### 6.1 Store 扩展（segmentStore）
+### 7.1 Store 扩展（segmentStore）
 
 无需新增全局状态，译文和附注数据已包含在 `Segment` 对象中。
 
-### 6.2 详情页本地状态（SegmentDetail）
+### 7.2 详情页本地状态（SegmentDetail）
 
 ```
 localState = {
@@ -448,9 +507,9 @@ localState = {
 
 ---
 
-## 七、数据库 Schema 变更
+## 八、数据库 Schema 变更
 
-### 7.1 segments 表新增字段
+### 8.1 segments 表新增字段
 
 ```sql
 ALTER TABLE segments ADD COLUMN original_text TEXT;
@@ -459,7 +518,7 @@ ALTER TABLE segments ADD COLUMN notes TEXT;  -- 存储 JSON 数组
 ALTER TABLE segments ADD COLUMN is_modified INTEGER DEFAULT 0;
 ```
 
-### 7.2 数据迁移
+### 8.2 数据迁移
 
 **初始化现有段落：**
 1. 遍历所有 `segments` 记录
@@ -468,7 +527,7 @@ ALTER TABLE segments ADD COLUMN is_modified INTEGER DEFAULT 0;
 
 ---
 
-## 八、实施步骤建议
+## 九、实施步骤建议
 
 ### Phase 1：基础数据结构
 1. 数据库 Schema 变更（新增字段）
@@ -508,28 +567,28 @@ ALTER TABLE segments ADD COLUMN is_modified INTEGER DEFAULT 0;
 
 ---
 
-## 九、注意事项
+## 十、注意事项
 
-### 9.1 数据一致性
+### 10.1 数据一致性
 
 - 保存时全量更新 `translatedText` 和 `notes`，不做增量
 - 删除附注后，`notes` 数组中的空元素需清理
 - 确保 `notes` 存储为有效的 JSON 数组字符串
 
-### 9.2 用户体验
+### 10.2 用户体验
 
 - 未保存的修改在离开详情页前应提示确认
 - 翻译过程显示加载动画
 - 保存成功/失败都要有明确的提示
 - 删除操作需要二次确认
 
-### 9.3 性能优化
+### 10.3 性能优化
 
 - 附注数组不宜过大（建议上限100条）
 - 译文和附注的保存是原子操作，要么全成功要么全失败
 - 列表中不显示完整译文和附注，只显示原文预览
 
-### 9.4 扩展性
+### 10.4 扩展性
 
 - 预留翻译服务商配置（将来替换Mock实现）
 - 预留附注的关键词、位置等扩展字段（当前简化为字符串）
@@ -537,7 +596,7 @@ ALTER TABLE segments ADD COLUMN is_modified INTEGER DEFAULT 0;
 
 ---
 
-## 十、Mock翻译函数示例逻辑
+## 十一、Mock翻译函数示例逻辑
 
 ### 输入
 ```
@@ -563,27 +622,27 @@ sourceText = "这是一段测试文本，包含多个词汇和概念。"
 
 ---
 
-## 十一、界面交互细节补充
+## 十二、界面交互细节补充
 
-### 11.1 译文区域
+### 12.1 译文区域
 
 - **未翻译状态：** 显示空白 + 提示文字"点击下方「翻译」按钮生成译文"
 - **已翻译状态：** 显示译文，可编辑
 - **修改后：** 右上角显示"已修改"标记（可选）
 
-### 11.2 附注区域
+### 12.2 附注区域
 
 - **未翻译状态：** 显示空白 + 提示文字"翻译后将自动生成附注"
 - **已翻译状态：** 显示附注列表 + [+] 按钮
 - **空附注：** 显示"暂无附注" + [+] 按钮
 
-### 11.3 原文区域
+### 12.3 原文区域
 
 - **始终显示：** 不可编辑，灰色背景
 - **长文本：** 支持滚动查看
 - **标签：** 顶部显示"原文"标签
 
-### 11.4 按钮状态
+### 12.4 按钮状态
 
 **[保存] 按钮：**
 - 无修改：禁用，灰色
@@ -597,21 +656,21 @@ sourceText = "这是一段测试文本，包含多个词汇和概念。"
 
 ---
 
-## 十二、错误处理
+## 十三、错误处理
 
-### 12.1 翻译失败
+### 13.1 翻译失败
 
 - 显示错误提示："翻译失败，请重试"
 - 保持原有状态不变
 - [翻译] 按钮恢复可用
 
-### 12.2 保存失败
+### 13.2 保存失败
 
 - 显示错误提示："保存失败: [具体错误信息]"
 - 保持修改状态，允许重新保存
 - [保存] 按钮恢复可用
 
-### 12.3 删除失败
+### 13.3 删除失败
 
 - 显示错误提示："删除失败: [具体错误信息]"
 - 保持段落不变
@@ -619,7 +678,7 @@ sourceText = "这是一段测试文本，包含多个词汇和概念。"
 
 ---
 
-## 十三、设计原则
+## 十四、设计原则
 
 1. **渐进式实现：** 先实现核心功能（翻译、保存），再优化交互
 2. **用户友好：** 操作提示清晰，错误处理完善
