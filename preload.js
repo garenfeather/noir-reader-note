@@ -29,4 +29,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('segments:parse', projectId, chapterId, chapterHref),
   getSegmentText: (projectId, chapterHref, xpath) =>
     ipcRenderer.invoke('segments:getSegmentText', projectId, chapterHref, xpath),
+  translateSegment: (originalText) =>
+    ipcRenderer.invoke('segments:translate', originalText),
 })

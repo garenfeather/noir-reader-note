@@ -345,3 +345,64 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
     return { success: false, error: error.message }
   }
 })
+
+// IPC 处理：翻译分段（Mock 实现）
+ipcMain.handle('segments:translate', async (event, originalText) => {
+  try {
+    console.log('IPC segments:translate 收到请求', { textLength: originalText?.length })
+
+    if (!originalText) {
+      throw new Error('缺少原文参数')
+    }
+
+    // Mock 翻译逻辑：
+    // 1. 译文 = 原文（保持不变）
+    const translatedText = originalText
+
+    // 2. 附注 = 随机提取词汇生成
+    const notes = []
+
+    // 简单分词（按空格和标点分割）
+    const words = originalText
+      .split(/[\s\p{P}]+/u)
+      .filter(word => word.length > 3) // 只保留长度 > 3 的词
+      .slice(0, 10) // 最多取 10 个词
+
+    // 随机选择 2-4 个词生成附注
+    const noteCount = Math.min(words.length, Math.floor(Math.random() * 3) + 2)
+    const selectedWords = []
+
+    // 随机选择不重复的词
+    while (selectedWords.length < noteCount && selectedWords.length < words.length) {
+      const randomWord = words[Math.floor(Math.random() * words.length)]
+      if (!selectedWords.includes(randomWord)) {
+        selectedWords.push(randomWord)
+      }
+    }
+
+    // 生成附注
+    selectedWords.forEach(word => {
+      notes.push({
+        id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        text: `【${word}】的注释说明`,
+        timestamp: Date.now()
+      })
+    })
+
+    console.log('IPC: 翻译完成（Mock）', {
+      translatedLength: translatedText.length,
+      notesCount: notes.length
+    })
+
+    return {
+      success: true,
+      data: {
+        translatedText,
+        notes
+      }
+    }
+  } catch (error) {
+    console.error('IPC翻译分段失败:', error)
+    return { success: false, error: error.message }
+  }
+})

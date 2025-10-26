@@ -54,6 +54,7 @@ class DatabaseService {
 
     // 创建分段表
     // 新增字段支持译文和附注功能
+    // 原文通过xpath动态读取，不存储在数据库中
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS segments (
         id TEXT PRIMARY KEY,
@@ -67,7 +68,6 @@ class DatabaseService {
         parent_segment_id TEXT,
         preview TEXT,
         text_length INTEGER DEFAULT 0,
-        original_text TEXT,
         translated_text TEXT,
         notes TEXT,
         is_modified INTEGER DEFAULT 0,
@@ -218,8 +218,8 @@ class DatabaseService {
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
-      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length, original_text, translated_text, notes, is_modified)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length, translated_text, notes, is_modified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     // 使用事务确保数据一致性
@@ -240,7 +240,6 @@ class DatabaseService {
           segment.parentSegmentId || null,
           segment.preview || null,
           segment.textLength || 0,
-          segment.originalText || null,
           segment.translatedText || null,
           notesJSON,
           segment.isModified ? 1 : 0
@@ -498,12 +497,13 @@ class DatabaseService {
   /**
    * 加载章节的分段数据
    * 包含译文和附注信息
+   * 原文通过xpath动态读取，不从数据库返回
    */
   loadSegments(projectId, chapterId) {
     const stmt = this.db.prepare(`
       SELECT id, project_id, chapter_id, chapter_href, xpath, cfi_range, position,
              is_empty, parent_segment_id, preview, text_length, created_at,
-             original_text, translated_text, notes, is_modified
+             translated_text, notes, is_modified
       FROM segments
       WHERE project_id = ? AND chapter_id = ?
       ORDER BY position ASC
@@ -525,7 +525,6 @@ class DatabaseService {
         preview: row.preview,
         textLength: row.text_length,
         createdAt: row.created_at,
-        originalText: row.original_text,
         translatedText: row.translated_text,
         notes: row.notes ? JSON.parse(row.notes) : null,
         isModified: row.is_modified === 1

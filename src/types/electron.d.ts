@@ -1,5 +1,5 @@
 import { Project, ProjectInfo } from './project'
-import { Segment, SegmentParseResult } from './segment'
+import { Segment, SegmentParseResult, Note } from './segment'
 
 export interface ElectronAPI {
   // 文件操作
@@ -43,6 +43,10 @@ export interface ElectronAPI {
     chapterHref: string,
     xpath: string
   ) => Promise<{ success: boolean; data?: { text: string }; error?: string }>
+
+  translateSegment: (
+    originalText: string
+  ) => Promise<{ success: boolean; data?: { translatedText: string; notes: Note[] }; error?: string }>
 }
 
 declare global {

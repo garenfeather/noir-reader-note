@@ -2,6 +2,15 @@
  * 分段相关类型定义
  */
 
+/**
+ * 附注项
+ */
+export interface Note {
+  id: string                    // 附注ID
+  text: string                  // 附注内容
+  timestamp: number             // 创建时间戳
+}
+
 export interface Segment {
   id: string                    // 分段ID (uuid)
   projectId: string             // 项目ID
@@ -15,6 +24,11 @@ export interface Segment {
   preview?: string              // 预览文字（列表显示用）
   textLength?: number           // 完整文本的字符数
   createdAt?: string            // 创建时间
+  // 翻译和附注功能
+  originalText?: string         // 原文（临时字段，不持久化，从XHTML动态读取）
+  translatedText?: string | null // 译文
+  notes?: Note[] | null         // 附注列表
+  isModified?: boolean          // 是否被修改过
 }
 
 export interface SegmentParseResult {
