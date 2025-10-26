@@ -186,6 +186,50 @@ segments.map((segment, index) => {
 - [翻译] 按钮：蓝色 primary 样式（与分割按钮一致）
 - [保存] 按钮：默认样式，无修改时禁用
 
+**显示/隐藏规则：**
+
+**初始状态（无译文和附注）：**
+```
+┌──────────────────────────────────────┐
+│  ← 返回                              │
+├──────────────────────────────────────┤
+│                                      │
+│  【原文】                             │
+│  ┌────────────────────────────────┐  │
+│  │ 这是原始段落文本内容            │  │
+│  │ [只读，灰色背景]                 │  │
+│  └────────────────────────────────┘  │
+│                                      │
+├──────────────────────────────────────┤
+│  [翻译]                              │ ← 只有翻译按钮
+└──────────────────────────────────────┘
+```
+- **不显示**译文区域
+- **不显示**附注区域
+- **不显示**保存按钮（因为没有可保存的内容）
+- 只显示原文和翻译按钮
+
+**有译文但无附注：**
+- 显示译文区域
+- **不显示**附注区域
+- 显示保存和翻译按钮
+
+**有译文和附注：**
+- 显示译文区域
+- 显示附注区域
+- 显示保存和翻译按钮
+
+**判断逻辑：**
+```typescript
+const hasTranslation = !!segment.translatedText
+const hasNotes = segment.notes && segment.notes.length > 0
+
+// 显示规则
+showTranslationSection = hasTranslation
+showNotesSection = hasNotes
+showSaveButton = hasTranslation || hasNotes
+```
+
 ---
 
 ### 3.3 附注条目组件（NoteItem）
@@ -228,7 +272,7 @@ segments.map((segment, index) => {
 
 **触发：** 点击详情页底部"翻译"按钮
 
-**步骤：**
+**首次翻译步骤：**
 1. 获取当前段落的 `originalText`
 2. 显示加载状态："正在翻译..."
 3. 调用翻译函数（临时Mock实现）
@@ -237,6 +281,28 @@ segments.map((segment, index) => {
    - 译文框显示 `translatedText`
    - 附注区域显示 `notes` 数组（每条作为一个 NoteItem）
 6. 标记为已修改，启用"保存"按钮
+
+**重新翻译行为（已有译文/附注时）：**
+
+**译文处理：**
+- **覆盖模式**：新生成的译文会**完全覆盖**当前译文
+- 用户之前对译文的手动修改会丢失
+
+**附注处理：**
+- **追加模式**：新生成的附注会**追加到**现有附注列表末尾
+- 保留所有已有附注（包括用户手动添加或修改的）
+- 新附注添加到数组末尾
+
+**示例：**
+```
+当前状态：
+- 译文: "用户修改过的译文"
+- 附注: ["附注1", "附注2"]
+
+点击翻译后：
+- 译文: "新生成的译文" （覆盖）
+- 附注: ["附注1", "附注2", "新附注1", "新附注2"] （追加）
+```
 
 **临时Mock实现：**
 ```
@@ -509,21 +575,54 @@ localState = {
 
 ## 八、数据库 Schema 变更
 
-### 8.1 segments 表新增字段
+### 8.1 开发环境数据清理
+
+**重要：不使用 ALTER TABLE，而是完全重建数据库**
+
+**步骤：**
+1. 调用本地已有的清空项目数据脚本
+2. 删除数据库中的所有表（DROP TABLE）
+3. 应用启动时按照新格式创建数据库表
+
+**优点：**
+- 避免迁移脚本的复杂性
+- 确保数据结构完全符合新设计
+- 开发阶段可快速迭代
+
+### 8.2 segments 表完整结构（含新字段）
 
 ```sql
-ALTER TABLE segments ADD COLUMN original_text TEXT;
-ALTER TABLE segments ADD COLUMN translated_text TEXT;
-ALTER TABLE segments ADD COLUMN notes TEXT;  -- 存储 JSON 数组
-ALTER TABLE segments ADD COLUMN is_modified INTEGER DEFAULT 0;
+CREATE TABLE segments (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  chapter_id TEXT NOT NULL,
+  chapter_href TEXT NOT NULL,
+  xpath TEXT NOT NULL,
+  cfi_range TEXT,
+  position REAL NOT NULL,
+  is_empty INTEGER DEFAULT 0,
+  parent_segment_id TEXT,
+  preview TEXT,
+  text_length INTEGER,
+
+  -- 新增字段
+  original_text TEXT,              -- 原始文本（从EPUB提取）
+  translated_text TEXT,            -- 译文
+  notes TEXT,                      -- 附注数组（JSON格式）
+  is_modified INTEGER DEFAULT 0,   -- 是否被修改过
+
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
 ```
 
-### 8.2 数据迁移
-
-**初始化现有段落：**
-1. 遍历所有 `segments` 记录
-2. 如果 `original_text` 为空，则从 EPUB 中重新提取（基于 `xpath` 或 `cfiRange`）
-3. 如果无法提取，则使用 `preview` 或空字符串
+**字段说明：**
+- `original_text`：段落的原始文本内容
+- `translated_text`：翻译生成或用户编辑的译文（可为空）
+- `notes`：附注条目数组，存储为 JSON 字符串，如 `["附注1", "附注2"]`（可为空）
+- `is_modified`：标记译文或附注是否被修改过
 
 ---
 
@@ -626,15 +725,15 @@ sourceText = "这是一段测试文本，包含多个词汇和概念。"
 
 ### 12.1 译文区域
 
-- **未翻译状态：** 显示空白 + 提示文字"点击下方「翻译」按钮生成译文"
-- **已翻译状态：** 显示译文，可编辑
+- **无译文：** **不显示**译文区域（整个区域隐藏）
+- **有译文：** 显示译文区域，内容可编辑
 - **修改后：** 右上角显示"已修改"标记（可选）
 
 ### 12.2 附注区域
 
-- **未翻译状态：** 显示空白 + 提示文字"翻译后将自动生成附注"
-- **已翻译状态：** 显示附注列表 + [+] 按钮
-- **空附注：** 显示"暂无附注" + [+] 按钮
+- **无附注：** **不显示**附注区域（整个区域隐藏）
+- **有附注：** 显示附注区域 + [+] 按钮，列表可编辑和删除
+- **可添加：** 编辑模式下可通过 [+] 按钮手动添加附注
 
 ### 12.3 原文区域
 
@@ -652,7 +751,7 @@ sourceText = "这是一段测试文本，包含多个词汇和概念。"
 **[翻译] 按钮：**
 - 默认：启用，蓝色 primary 样式
 - 翻译中：加载状态，文字变为"翻译中..."
-- 已有译文：提示"重新翻译将覆盖当前译文和附注，是否继续？"
+- 已有译文：提示"重新翻译将覆盖当前译文，新附注会追加到现有列表，是否继续？"
 
 ---
 
