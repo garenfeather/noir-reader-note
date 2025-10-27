@@ -554,6 +554,32 @@ class DatabaseService {
   }
 
   /**
+   * 更新分段的译文和附注
+   * @param {string} segmentId - 分段ID
+   * @param {string|null} translatedText - 译文
+   * @param {Array|null} notes - 附注列表
+   */
+  updateSegmentNotes(segmentId, translatedText, notes) {
+    const stmt = this.db.prepare(`
+      UPDATE segments
+      SET translated_text = ?,
+          notes = ?,
+          is_modified = 1
+      WHERE id = ?
+    `)
+
+    try {
+      const notesJSON = notes ? JSON.stringify(notes) : null
+      stmt.run(translatedText || null, notesJSON, segmentId)
+      console.log('分段译文和附注更新成功:', segmentId)
+      return true
+    } catch (error) {
+      console.error('更新分段译文和附注失败:', error)
+      throw error
+    }
+  }
+
+  /**
    * 删除项目（级联删除分段）
    */
   deleteProject(projectId) {

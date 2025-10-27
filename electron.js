@@ -406,3 +406,28 @@ ipcMain.handle('segments:translate', async (event, originalText) => {
     return { success: false, error: error.message }
   }
 })
+
+// IPC 处理：保存分段的译文和附注
+ipcMain.handle('segments:saveNotes', async (event, segmentId, translatedText, notes) => {
+  try {
+    console.log('IPC segments:saveNotes 收到请求', {
+      segmentId,
+      hasTranslation: !!translatedText,
+      notesCount: notes?.length || 0
+    })
+
+    if (!segmentId) {
+      throw new Error('缺少分段ID参数')
+    }
+
+    const db = databaseService
+    db.updateSegmentNotes(segmentId, translatedText, notes)
+
+    console.log('IPC: 保存译文和附注成功')
+
+    return { success: true }
+  } catch (error) {
+    console.error('IPC保存译文和附注失败:', error)
+    return { success: false, error: error.message }
+  }
+})

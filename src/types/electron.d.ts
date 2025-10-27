@@ -47,6 +47,12 @@ export interface ElectronAPI {
   translateSegment: (
     originalText: string
   ) => Promise<{ success: boolean; data?: { translatedText: string; notes: Note[] }; error?: string }>
+
+  saveSegmentNotes: (
+    segmentId: string,
+    translatedText: string | null,
+    notes: Note[] | null
+  ) => Promise<{ success: boolean; error?: string }>
 }
 
 declare global {

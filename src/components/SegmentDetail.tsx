@@ -89,15 +89,25 @@ function SegmentDetail({ segment, index, onBack }: Props) {
         return
       }
 
-      // TODO: 实现 saveSegmentNotes API
-      // 临时占位符
+      if (!window.electronAPI?.saveSegmentNotes) {
+        message.error('保存功能不可用')
+        return
+      }
+
       setIsSaving(true)
 
-      // 模拟保存延迟
-      await new Promise(resolve => setTimeout(resolve, 500))
+      const result = await window.electronAPI.saveSegmentNotes(
+        segment.id,
+        translatedText,
+        notes
+      )
 
-      message.success('保存成功（Mock）')
-      setHasChanges(false)
+      if (result.success) {
+        message.success('保存成功')
+        setHasChanges(false)
+      } else {
+        message.error('保存失败: ' + (result.error || '未知错误'))
+      }
     } catch (error) {
       console.error('保存失败:', error)
       message.error('保存失败')
