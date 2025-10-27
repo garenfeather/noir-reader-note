@@ -4,10 +4,12 @@
  */
 
 import { Button, Spin, message } from 'antd'
-import { ArrowLeftOutlined, TranslationOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, TranslationOutlined, SaveOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Segment, Note } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
+import TranslationSection from './TranslationSection'
+import NotesSection from './NotesSection'
 
 interface Props {
   segment: Segment
@@ -19,8 +21,10 @@ function SegmentDetail({ segment, index, onBack }: Props) {
   const [text, setText] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [translatedText, setTranslatedText] = useState<string | null>(segment.translatedText || null)
   const [notes, setNotes] = useState<Note[] | null>(segment.notes || null)
+  const [hasChanges, setHasChanges] = useState(false)
   const { currentProject } = useProjectStore()
 
   useEffect(() => {
@@ -70,6 +74,38 @@ function SegmentDetail({ segment, index, onBack }: Props) {
     loadText()
   }, [segment.id, currentProject?.id])
 
+  // 检测数据变化
+  useEffect(() => {
+    const translationChanged = translatedText !== (segment.translatedText || null)
+    const notesChanged = JSON.stringify(notes) !== JSON.stringify(segment.notes || null)
+    setHasChanges(translationChanged || notesChanged)
+  }, [translatedText, notes, segment])
+
+  // 处理保存
+  const handleSave = async () => {
+    try {
+      if (!hasChanges) {
+        message.info('没有需要保存的更改')
+        return
+      }
+
+      // TODO: 实现 saveSegmentNotes API
+      // 临时占位符
+      setIsSaving(true)
+
+      // 模拟保存延迟
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      message.success('保存成功（Mock）')
+      setHasChanges(false)
+    } catch (error) {
+      console.error('保存失败:', error)
+      message.error('保存失败')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   // 处理翻译
   const handleTranslate = async () => {
     try {
@@ -117,7 +153,6 @@ function SegmentDetail({ segment, index, onBack }: Props) {
         <h3 className="font-semibold">段落 {index + 1}</h3>
         <div className="flex-1" />
         <Button
-          type="primary"
           icon={<TranslationOutlined />}
           onClick={handleTranslate}
           loading={isTranslating}
@@ -125,6 +160,16 @@ function SegmentDetail({ segment, index, onBack }: Props) {
           size="small"
         >
           翻译
+        </Button>
+        <Button
+          type="primary"
+          icon={<SaveOutlined />}
+          onClick={handleSave}
+          loading={isSaving}
+          disabled={!hasChanges}
+          size="small"
+        >
+          保存
         </Button>
         {isLoading && <Spin size="small" />}
       </div>
@@ -140,35 +185,17 @@ function SegmentDetail({ segment, index, onBack }: Props) {
           </div>
         </div>
 
-        {/* 译文内容 */}
-        {translatedText && (
-          <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">译文</h4>
-            <div className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap p-3 bg-blue-50 rounded border border-blue-200">
-              {translatedText}
-            </div>
-          </div>
-        )}
+        {/* 译文区域 */}
+        <TranslationSection
+          translatedText={translatedText}
+          onChange={setTranslatedText}
+        />
 
-        {/* 附注列表 */}
-        {notes && notes.length > 0 && (
-          <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">附注 ({notes.length})</h4>
-            <div className="space-y-2">
-              {notes.map((note, idx) => (
-                <div
-                  key={note.id}
-                  className="p-3 bg-yellow-50 rounded border border-yellow-200"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs text-gray-500 font-mono">{idx + 1}.</span>
-                    <div className="flex-1 text-sm text-gray-800">{note.text}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* 附注区域 */}
+        <NotesSection
+          notes={notes}
+          onNotesChange={setNotes}
+        />
 
         {/* 原文内容 */}
         {text && (
