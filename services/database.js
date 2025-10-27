@@ -599,6 +599,26 @@ class DatabaseService {
   }
 
   /**
+   * 删除指定章节的所有分段
+   * @param {string} projectId - 项目ID
+   * @param {string} chapterId - 章节ID
+   */
+  deleteChapterSegments(projectId, chapterId) {
+    const stmt = this.db.prepare(`
+      DELETE FROM segments WHERE project_id = ? AND chapter_id = ?
+    `)
+
+    try {
+      const result = stmt.run(projectId, chapterId)
+      console.log('章节分段删除成功:', { projectId, chapterId, changes: result.changes })
+      return result.changes
+    } catch (error) {
+      console.error('删除章节分段失败:', error)
+      throw error
+    }
+  }
+
+  /**
    * 删除项目（级联删除分段）
    */
   deleteProject(projectId) {

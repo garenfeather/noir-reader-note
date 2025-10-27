@@ -36,11 +36,11 @@ function TableOfContents({ epubData }: Props) {
         const menuItem: MenuItem = {
           key,
           label: (
-            <span className="relative truncate">
+            <span className="relative truncate flex items-center justify-between w-full pr-2">
+              <span className="truncate">{item.label}</span>
               {hasSegments && (
-                <span className="absolute -left-3 top-1/2 -translate-y-1/2 inline-block w-1.5 h-1.5 bg-blue-500 transform rotate-45 rounded-[1px]" />
+                <span className="flex-shrink-0 inline-block w-1.5 h-1.5 bg-blue-500 transform rotate-45 rounded-[1px]" />
               )}
-              {item.label}
             </span>
           ),
         }

@@ -57,6 +57,11 @@ export interface ElectronAPI {
   deleteSegment: (
     segmentId: string
   ) => Promise<{ success: boolean; error?: string }>
+
+  clearChapterSegments: (
+    projectId: string,
+    chapterId: string
+  ) => Promise<{ success: boolean; deletedCount?: number; error?: string }>
 }
 
 declare global {

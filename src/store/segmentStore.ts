@@ -55,8 +55,10 @@ interface SegmentState {
   setActiveChapter: (chapterId: string | null, chapterHref: string) => void
   setChaptersWithSegments: (chapters: string[]) => void
   addChapterWithSegments: (chapterHref: string) => void
+  removeChapterWithSegments: (chapterHref: string) => void
   markSegmentDeleted: (segmentId: string) => void
   clearSegments: () => void
+  clearModifiedFlags: () => void
 }
 
 export const useSegmentStore = create<SegmentState>((set, get) => ({
@@ -122,6 +124,13 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
     set({ chaptersWithSegments: next })
   },
 
+  removeChapterWithSegments: (chapterHref) => {
+    if (!chapterHref) return
+    const next = new Set(get().chaptersWithSegments)
+    next.delete(chapterHref)
+    set({ chaptersWithSegments: next })
+  },
+
   markSegmentDeleted: (segmentId) => {
     // 从 segments 和 visibleSegments 中移除
     const segments = get().segments.filter(s => s.id !== segmentId)
@@ -143,5 +152,11 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
       isEditMode: false,
       editSource: null,
       deletedSegmentIds: []
-    })
+    }),
+
+  clearModifiedFlags: () => {
+    const segments = get().segments.map(s => ({ ...s, isModified: false }))
+    const visibleSegments = segments.filter(s => !s.isEmpty)
+    set({ segments, visibleSegments, deletedSegmentIds: [] })
+  }
 }))

@@ -3,8 +3,8 @@
  * 显示段落的完整信息（第一次点击时从XHTML读取并缓存）
  */
 
-import { Button, Spin, message } from 'antd'
-import { ArrowLeftOutlined, TranslationOutlined, SaveOutlined } from '@ant-design/icons'
+import { Button, Spin } from 'antd'
+import { ArrowLeftOutlined, TranslationOutlined, PlusOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Segment, Note } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
@@ -23,10 +23,11 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
   const [text, setText] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [translatedText, setTranslatedText] = useState<string | null>(segment.translatedText || null)
   const [notes, setNotes] = useState<Note[] | null>(segment.notes || null)
   const [hasChanges, setHasChanges] = useState(false)
+  const [isAddingNote, setIsAddingNote] = useState(false)
+  const [originalSegment] = useState(segment) // 保存原始segment用于比较
   const { currentProject } = useProjectStore()
   const { updateSegmentContent } = useSegmentStore()
 
@@ -79,58 +80,26 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
 
   // 检测数据变化
   useEffect(() => {
-    const translationChanged = translatedText !== (segment.translatedText || null)
-    const notesChanged = JSON.stringify(notes) !== JSON.stringify(segment.notes || null)
-    setHasChanges(translationChanged || notesChanged)
-  }, [translatedText, notes, segment])
+    // 与原始segment比较，而不是当前传入的segment
+    const translationChanged = translatedText !== (originalSegment.translatedText || null)
+    const notesChanged = JSON.stringify(notes) !== JSON.stringify(originalSegment.notes || null)
+    const changed = translationChanged || notesChanged
+    setHasChanges(changed)
 
-  // 处理保存
-  const handleSave = async () => {
-    try {
-      if (!hasChanges) {
-        message.info('没有需要保存的更改')
-        return
-      }
-
-      if (!window.electronAPI?.saveSegmentNotes) {
-        message.error('保存功能不可用')
-        return
-      }
-
-      setIsSaving(true)
-
-      const result = await window.electronAPI.saveSegmentNotes(
-        segment.id,
-        translatedText,
-        notes
-      )
-
-      if (result.success) {
-        message.success('保存成功')
-        setHasChanges(false)
-        // 更新 store 中的数据
-        updateSegmentContent(segment.id, translatedText, notes)
-      } else {
-        message.error('保存失败: ' + (result.error || '未知错误'))
-      }
-    } catch (error) {
-      console.error('保存失败:', error)
-      message.error('保存失败')
-    } finally {
-      setIsSaving(false)
+    // 只在编辑模式且有真正变更时才更新 store
+    if (allowEdit && changed) {
+      updateSegmentContent(segment.id, translatedText, notes)
     }
-  }
+  }, [translatedText, notes, originalSegment, segment.id, allowEdit, updateSegmentContent])
 
   // 处理翻译
   const handleTranslate = async () => {
     try {
       if (!text) {
-        message.warning('原文尚未加载完成')
         return
       }
 
       if (!window.electronAPI?.translateSegment) {
-        message.error('翻译功能不可用')
         return
       }
 
@@ -143,13 +112,9 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
         // 追加新附注到现有附注列表
         const newNotes = [...(notes || []), ...result.data.notes]
         setNotes(newNotes)
-        message.success('翻译完成')
-      } else {
-        message.error('翻译失败: ' + (result.error || '未知错误'))
       }
     } catch (error) {
       console.error('翻译异常:', error)
-      message.error('翻译异常')
     } finally {
       setIsTranslating(false)
     }
@@ -165,7 +130,12 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
           onClick={onBack}
           size="small"
         />
-        <h3 className="font-semibold">段落 {index + 1}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold">段落 {index + 1}</h3>
+          {hasChanges && (
+            <span className="inline-block w-2.5 h-2.5 bg-red-500 rounded-full shadow-sm" title="有未保存的变更"></span>
+          )}
+        </div>
         {isLoading && <Spin size="small" className="ml-auto" />}
       </div>
 
@@ -183,6 +153,8 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
           notes={notes}
           onNotesChange={setNotes}
           allowEdit={allowEdit}
+          externalAddTrigger={isAddingNote}
+          onAddComplete={() => setIsAddingNote(false)}
         />
 
         {/* 原文内容 */}
@@ -210,15 +182,14 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
             >
               翻译
             </Button>
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              onClick={handleSave}
-              loading={isSaving}
-              disabled={!hasChanges}
-            >
-              保存
-            </Button>
+            {(!notes || notes.length === 0) && (
+              <Button
+                icon={<PlusOutlined />}
+                onClick={() => setIsAddingNote(true)}
+              >
+                添加附注
+              </Button>
+            )}
           </div>
         </div>
       )}

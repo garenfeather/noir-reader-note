@@ -4,8 +4,8 @@
  */
 
 import { Button, Input } from 'antd'
-import { PlusOutlined, CloseOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { PlusOutlined, CloseOutlined, CheckOutlined } from '@ant-design/icons'
+import { useState, useEffect } from 'react'
 import { Note } from '../types/segment'
 import NoteItem from './NoteItem'
 
@@ -15,11 +15,20 @@ interface Props {
   notes: Note[] | null
   onNotesChange: (notes: Note[]) => void
   allowEdit?: boolean
+  externalAddTrigger?: boolean
+  onAddComplete?: () => void
 }
 
-function NotesSection({ notes, onNotesChange, allowEdit = true }: Props) {
+function NotesSection({ notes, onNotesChange, allowEdit = true, externalAddTrigger = false, onAddComplete }: Props) {
   const [isAdding, setIsAdding] = useState(false)
   const [newNoteText, setNewNoteText] = useState('')
+
+  // 监听外部添加触发
+  useEffect(() => {
+    if (externalAddTrigger) {
+      setIsAdding(true)
+    }
+  }, [externalAddTrigger])
 
   // 如果没有附注且不在添加状态，不显示此区域
   if (!notes?.length && !isAdding) {
@@ -37,6 +46,7 @@ function NotesSection({ notes, onNotesChange, allowEdit = true }: Props) {
       onNotesChange([...(notes || []), newNote])
       setNewNoteText('')
       setIsAdding(false)
+      onAddComplete?.()
     }
   }
 
@@ -99,7 +109,7 @@ function NotesSection({ notes, onNotesChange, allowEdit = true }: Props) {
               <Button
                 type="primary"
                 size="small"
-                icon={<PlusOutlined />}
+                icon={<CheckOutlined />}
                 onClick={handleAddNote}
                 disabled={!newNoteText.trim()}
               />
@@ -109,6 +119,7 @@ function NotesSection({ notes, onNotesChange, allowEdit = true }: Props) {
                 onClick={() => {
                   setNewNoteText('')
                   setIsAdding(false)
+                  onAddComplete?.()
                 }}
               />
             </div>

@@ -4,7 +4,7 @@
  */
 
 import { Button, Input } from 'antd'
-import { DeleteOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, CloseOutlined, CheckOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { Note } from '../types/segment'
 

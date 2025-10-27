@@ -471,3 +471,23 @@ ipcMain.handle('segments:delete', async (event, segmentId) => {
     return { success: false, error: error.message }
   }
 })
+
+// IPC 处理：清空章节所有分段
+ipcMain.handle('segments:clearChapter', async (event, projectId, chapterId) => {
+  try {
+    console.log('IPC segments:clearChapter 收到请求', { projectId, chapterId })
+
+    if (!projectId || !chapterId) {
+      throw new Error('缺少项目ID或章节ID参数')
+    }
+
+    const deletedCount = dbService.deleteChapterSegments(projectId, chapterId)
+
+    console.log('IPC: 清空章节分段成功，删除数量:', deletedCount)
+
+    return { success: true, deletedCount }
+  } catch (error) {
+    console.error('IPC清空章节分段失败:', error)
+    return { success: false, error: error.message }
+  }
+})

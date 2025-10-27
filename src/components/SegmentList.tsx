@@ -3,11 +3,12 @@
  * 显示所有分段卡片
  */
 
-import { List, Spin, Empty, Button, Space } from 'antd'
-import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined } from '@ant-design/icons'
+import { List, Spin, Empty, Button, Space, Modal, message } from 'antd'
+import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useEffect, useRef, useCallback } from 'react'
 import { useSegmentStore } from '../store/segmentStore'
 import { useBookStore } from '../store/bookStore'
+import { useProjectStore } from '../store/projectStore'
 import SegmentCard from './SegmentCard'
 import SegmentDetail from './SegmentDetail'
 import {
@@ -37,14 +38,20 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     isParsed,
     isEditMode,
     editSource,
+    activeChapterId,
+    activeChapterHref,
     setHoveredSegment,
     setSelectedSegment,
     setEditMode,
     setEditSource,
     setSegments,
-    markSegmentDeleted
+    markSegmentDeleted,
+    clearSegments,
+    setParsed,
+    removeChapterWithSegments
   } = useSegmentStore()
 
+  const { currentProject, setHasUnsavedChanges } = useProjectStore()
   const { rendition } = useBookStore()
   const lastRenditionRef = useRef<typeof rendition>(null)
 
@@ -155,6 +162,47 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     onSegment()
     setEditMode(true)
     setEditSource('segment')
+  }
+
+  // 处理清空章节
+  const handleClear = () => {
+    if (!allowEditing || !currentProject || !activeChapterId) {
+      message.error('项目信息缺失')
+      return
+    }
+
+    Modal.confirm({
+      title: '确认清空',
+      content: '确定要清空当前章节的所有附注吗？此操作不可恢复。',
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          const result = await window.electronAPI.clearChapterSegments(
+            currentProject.id,
+            activeChapterId
+          )
+
+          if (result.success) {
+            message.success(`已清空 ${result.deletedCount || 0} 个附注`)
+            // 清空本地状态
+            clearSegments()
+            setParsed(false)
+            setHasUnsavedChanges(false)
+            // 移除章节的小菱形标识
+            if (activeChapterHref) {
+              removeChapterWithSegments(activeChapterHref)
+            }
+          } else {
+            message.error('清空失败: ' + result.error)
+          }
+        } catch (error) {
+          console.error('清空章节失败:', error)
+          message.error('清空失败')
+        }
+      }
+    })
   }
 
   const triggerFlashHighlight = useCallback((segment: typeof visibleSegments[0]) => {
@@ -426,13 +474,22 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
             // 只读模式：根据是否有持久化结果显示不同按钮
             <div className="w-full flex justify-center">
               {hasPersisted ? (
-                // 有持久化结果：显示编辑按钮
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={handleEdit}
-                >
-                  编辑
-                </Button>
+                // 有持久化结果：显示编辑和清空按钮
+                <Space direction="horizontal" size="middle">
+                  <Button
+                    icon={<EditOutlined />}
+                    onClick={handleEdit}
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={handleClear}
+                  >
+                    清空
+                  </Button>
+                </Space>
               ) : (
                 // 无持久化结果：显示分割按钮
                 <Button

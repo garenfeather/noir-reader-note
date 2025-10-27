@@ -32,7 +32,9 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
       className={`mb-2 cursor-pointer transition-all duration-200 w-full relative ${
         isHovered
           ? 'bg-blue-50 border-blue-400 shadow-md'
-          : 'bg-white border-gray-200 hover:border-gray-400'
+          : segment.isModified
+            ? 'bg-red-50 border-red-200 hover:border-red-400'
+            : 'bg-white border-gray-200 hover:border-gray-400'
       }`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

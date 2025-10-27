@@ -27,7 +27,8 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
     setSegments,
     setLoading,
     setParsed,
-    deletedSegmentIds
+    deletedSegmentIds,
+    clearModifiedFlags
   } = useSegmentStore()
 
   // 始终允许操作，通过 isEditMode 控制编辑/只读
@@ -36,10 +37,14 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
   // 判断当前章节是否有持久化结果
   const hasPersisted = currentChapterHref ? chaptersWithSegments.has(currentChapterHref) : false
 
-  // 检测分段是否有修改（预留接口，将来实现手动编辑功能后完善）
+  // 检测分段是否有修改
   const hasSegmentChanges = (): boolean => {
-    // TODO: 将来实现手动编辑分段功能后，在这里检测当前 segments 是否与数据库中的不同
-    return false
+    // 检查是否有标记为修改的分段
+    const hasModifiedSegments = segments.some(s => s.isModified === true)
+    // 检查是否有待删除的分段
+    const hasDeletedSegments = deletedSegmentIds.length > 0
+
+    return hasModifiedSegments || hasDeletedSegments
   }
 
   // 移除 allowEditing 检查，编辑模式由底部按钮控制
@@ -85,11 +90,12 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
         console.log('✅ 已删除 ' + deletedSegmentIds.length + ' 个分段')
       }
 
-      // 2. 保存当前分段列表
+      // 2. 保存当前分段列表（清除 isModified 标记）
+      const segmentsToSave = segments.map(s => ({ ...s, isModified: false }))
       console.log('📤 调用 window.electronAPI.saveSegments...')
       const result = await window.electronAPI.saveSegments(
         currentProject.id,
-        segments
+        segmentsToSave
       )
       console.log('📥 saveSegments 返回结果:', result)
 
@@ -99,6 +105,9 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
         if (currentChapterHref) {
           addChapterWithSegments(currentChapterHref)
         }
+
+        // 立即清除所有修改标记
+        clearModifiedFlags()
 
         // 保存成功后，从数据库重新加载带 CFI 的数据
         console.log('📥 保存成功，重新加载带 CFI 的数据...')
