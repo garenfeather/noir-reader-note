@@ -4,7 +4,7 @@
  */
 
 import { Button, Input } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { Note } from '../types/segment'
 import NoteItem from './NoteItem'
@@ -14,9 +14,10 @@ const { TextArea } = Input
 interface Props {
   notes: Note[] | null
   onNotesChange: (notes: Note[]) => void
+  allowEdit?: boolean
 }
 
-function NotesSection({ notes, onNotesChange }: Props) {
+function NotesSection({ notes, onNotesChange, allowEdit = true }: Props) {
   const [isAdding, setIsAdding] = useState(false)
   const [newNoteText, setNewNoteText] = useState('')
 
@@ -57,19 +58,17 @@ function NotesSection({ notes, onNotesChange }: Props) {
 
   return (
     <div className="mb-4">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-2 mb-2">
         <h4 className="text-sm font-semibold text-gray-700">
           附注 {notes && notes.length > 0 && `(${notes.length})`}
         </h4>
-        {!isAdding && (
+        {!isAdding && allowEdit && (
           <Button
-            type="dashed"
+            type="text"
             size="small"
             icon={<PlusOutlined />}
             onClick={() => setIsAdding(true)}
-          >
-            添加附注
-          </Button>
+          />
         )}
       </div>
 
@@ -82,12 +81,13 @@ function NotesSection({ notes, onNotesChange }: Props) {
             index={index}
             onUpdate={handleUpdateNote}
             onDelete={handleDeleteNote}
+            allowEdit={allowEdit}
           />
         ))}
 
         {/* 添加新附注 */}
         {isAdding && (
-          <div className="p-3 bg-yellow-50 rounded border border-yellow-200 border-dashed">
+          <div className="p-3 bg-gray-50 rounded border border-gray-200">
             <TextArea
               value={newNoteText}
               onChange={(e) => setNewNoteText(e.target.value)}
@@ -102,18 +102,15 @@ function NotesSection({ notes, onNotesChange }: Props) {
                 icon={<PlusOutlined />}
                 onClick={handleAddNote}
                 disabled={!newNoteText.trim()}
-              >
-                添加
-              </Button>
+              />
               <Button
                 size="small"
+                icon={<CloseOutlined />}
                 onClick={() => {
                   setNewNoteText('')
                   setIsAdding(false)
                 }}
-              >
-                取消
-              </Button>
+              />
             </div>
           </div>
         )}

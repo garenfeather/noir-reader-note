@@ -3,8 +3,8 @@
  * 显示所有分段卡片
  */
 
-import { List, Spin, Empty, Button, Space, Modal, message } from 'antd'
-import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { List, Spin, Empty, Button, Space } from 'antd'
+import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined } from '@ant-design/icons'
 import { useEffect, useRef, useCallback } from 'react'
 import { useSegmentStore } from '../store/segmentStore'
 import { useBookStore } from '../store/bookStore'
@@ -18,8 +18,6 @@ import {
   generateCFIFromXPath
 } from '../utils/highlightHelper'
 
-const { confirm } = Modal
-
 interface Props {
   onAccept: () => void
   onDiscard: () => void
@@ -27,11 +25,10 @@ interface Props {
   onResegment: () => void
   onSegment: () => void
   allowEditing: boolean
-  mode: 'read' | 'translate'
   hasPersisted: boolean // 当前章节是否有持久化的分割结果
 }
 
-function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, allowEditing, mode, hasPersisted }: Props) {
+function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, allowEditing, hasPersisted }: Props) {
   const {
     visibleSegments,
     hoveredSegmentId,
@@ -39,10 +36,13 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     isLoading,
     isParsed,
     isEditMode,
+    editSource,
     setHoveredSegment,
     setSelectedSegment,
     setEditMode,
-    setSegments
+    setEditSource,
+    setSegments,
+    markSegmentDeleted
   } = useSegmentStore()
 
   const { rendition } = useBookStore()
@@ -111,44 +111,50 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     }
   }, [removeHoverHighlights])
 
-  // 处理接受
+  // 处理接受（分割状态）
   const handleAccept = () => {
     if (!allowEditing) return
     onAccept()
-    setEditMode(false) // 退出编辑模式
+    setEditMode(false)
+    setEditSource(null)
   }
 
-  // 处理丢弃
+  // 处理丢弃（分割状态）
   const handleDiscard = () => {
     if (!allowEditing) return
     onDiscard()
-    setEditMode(false) // 退出编辑模式
+    setEditMode(false)
+    setEditSource(null)
   }
 
-  // 处理取消
+  // 处理取消（编辑状态）
   const handleCancel = () => {
     if (!allowEditing) return
     onCancel()
-    setEditMode(false) // 退出编辑模式
+    setEditMode(false)
+    setEditSource(null)
   }
 
-  // 处理重新分割
+  // 处理重新分割（编辑状态 → 分割状态）
   const handleResegment = () => {
     if (!allowEditing) return
     onResegment()
-    // 保持编辑模式，不退出
+    setEditSource('segment')
   }
 
-  // 处理编辑
+  // 处理编辑（只读 → 编辑状态）
   const handleEdit = () => {
     if (!allowEditing) return
-    setEditMode(true) // 进入编辑模式
+    setEditMode(true)
+    setEditSource('edit')
   }
 
-  // 处理分割
+  // 处理分割（只读 → 分割状态）
   const handleSegment = () => {
     if (!allowEditing) return
     onSegment()
+    setEditMode(true)
+    setEditSource('segment')
   }
 
   const triggerFlashHighlight = useCallback((segment: typeof visibleSegments[0]) => {
@@ -278,38 +284,9 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     })
   }
 
-  // 处理删除分段
+  // 处理删除分段（仅标记删除，不弹窗）
   const handleDelete = (segmentId: string) => {
-    confirm({
-      title: '确认删除',
-      icon: <ExclamationCircleOutlined />,
-      content: '确定要删除这个附注吗？此操作不可恢复。',
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          if (!window.electronAPI?.deleteSegment) {
-            message.error('删除功能不可用')
-            return
-          }
-
-          const result = await window.electronAPI.deleteSegment(segmentId)
-
-          if (result.success) {
-            // 从当前列表中移除被删除的 segment
-            const updatedSegments = visibleSegments.filter(s => s.id !== segmentId)
-            setSegments(updatedSegments)
-            message.success('删除成功')
-          } else {
-            message.error('删除失败: ' + (result.error || '未知错误'))
-          }
-        } catch (error) {
-          console.error('删除异常:', error)
-          message.error('删除异常')
-        }
-      }
-    })
+    markSegmentDeleted(segmentId)
   }
 
   // 获取选中的段落
@@ -333,7 +310,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
       <div className="h-full flex flex-col">
         {/* 空状态提示 */}
         <div className="flex-1 flex items-center justify-center">
-          <Empty description={mode === 'translate' ? '点击底部「分割」按钮开始分段' : '当前章节暂无附注'} />
+          <Empty description="当前章节暂无附注" />
         </div>
 
         {/* 底部操作按钮 */}
@@ -359,11 +336,15 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
 
   // 如果选中了段落,显示详情页面
   if (selectedSegment && selectedIndex >= 0) {
+    // 只有在编辑模式下才允许编辑附注
+    const allowEdit = isEditMode
+
     return (
       <SegmentDetail
         segment={selectedSegment}
         index={selectedIndex}
         onBack={() => setSelectedSegment(null)}
+        allowEdit={allowEdit}
       />
     )
   }
@@ -385,7 +366,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                 onMouseLeave={() => setHoveredSegment(null)}
                 onClick={() => handleCardClick(segment)}
                 onDelete={handleDelete}
-                showDelete={mode === 'read'}
+                showDelete={isEditMode}
               />
             </List.Item>
           )}
@@ -399,15 +380,33 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
         </div>
         {allowEditing && (
           isEditMode ? (
-            hasPersisted ? (
-              // 编辑模式 + 已有持久化结果：显示接受/取消/重新分割按钮
-              <Space className="w-full justify-center" direction="horizontal" size="small">
+            editSource === 'segment' ? (
+              // 通过分割/重新分割进入编辑模式：显示接受、取消按钮
+              <Space className="w-full justify-center" direction="horizontal" size="middle">
                 <Button
                   type="primary"
                   icon={<CheckOutlined />}
                   onClick={handleAccept}
                 >
                   接受
+                </Button>
+                <Button
+                  icon={hasPersisted ? <RollbackOutlined /> : <CloseOutlined />}
+                  onClick={hasPersisted ? handleCancel : handleDiscard}
+                  danger={!hasPersisted}
+                >
+                  取消
+                </Button>
+              </Space>
+            ) : (
+              // 通过编辑按钮进入编辑模式：显示保存、取消、重新分割按钮
+              <Space className="w-full justify-center" direction="horizontal" size="small">
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  onClick={handleAccept}
+                >
+                  保存
                 </Button>
                 <Button
                   icon={<RollbackOutlined />}
@@ -422,35 +421,17 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                   重新分割
                 </Button>
               </Space>
-            ) : (
-              // 编辑模式 + 首次分割：显示接受/丢弃按钮
-              <Space className="w-full justify-center" direction="horizontal" size="middle">
-                <Button
-                  type="primary"
-                  icon={<CheckOutlined />}
-                  onClick={handleAccept}
-                >
-                  接受
-                </Button>
-                <Button
-                  danger
-                  icon={<CloseOutlined />}
-                  onClick={handleDiscard}
-                >
-                  丢弃
-                </Button>
-              </Space>
             )
           ) : (
-            // 非编辑模式：根据是否有持久化结果显示不同按钮
+            // 只读模式：根据是否有持久化结果显示不同按钮
             <div className="w-full flex justify-center">
               {hasPersisted ? (
-                // 有持久化结果：显示编辑附注按钮
+                // 有持久化结果：显示编辑按钮
                 <Button
                   icon={<EditOutlined />}
                   onClick={handleEdit}
                 >
-                  编辑附注
+                  编辑
                 </Button>
               ) : (
                 // 无持久化结果：显示分割按钮

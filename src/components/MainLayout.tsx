@@ -12,7 +12,7 @@ import { useSegmentStore } from '../store/segmentStore'
 const { Header, Content } = Layout
 
 function MainLayout() {
-  const [mode, setMode] = useState<'read' | 'translate'>('read')
+  // 移除 mode 状态，右侧面板始终显示，编辑/只读通过 isEditMode 控制
   const [showTranslationPanel, setShowTranslationPanel] = useState(false)
   const [epubData, setEpubData] = useState<ArrayBuffer | null>(null)
   const [epubPath, setEpubPath] = useState<string>('')
@@ -139,7 +139,7 @@ function MainLayout() {
             onCancel: async () => {
               // 删除旧项目并重新创建
               await window.electronAPI.deleteProject(result.data.project.id)
-              await createProject(path, data, true)
+              await createProject(epubPathToUse, epubDataToUse, true)
             }
           })
         } else {
@@ -218,44 +218,7 @@ function MainLayout() {
     }
   }
 
-  // 切换模式
-  const toggleMode = async () => {
-    const newMode = mode === 'read' ? 'translate' : 'read'
-
-    // 切换到只读模式：丢弃未接受的分割
-    if (newMode === 'read') {
-      const { isParsed, isEditMode } = useSegmentStore.getState()
-
-      if (isParsed && isEditMode) {
-        // 有未接受的分割，恢复到保存的状态
-        const { currentProject, currentChapterId } = useProjectStore.getState()
-        if (currentProject && currentChapterId) {
-          try {
-            const result = await window.electronAPI.loadSegments(currentProject.id, currentChapterId)
-            if (result.success && result.data) {
-              setSegments(result.data)
-              setParsed(result.data.length > 0)
-            } else {
-              // 没有保存的分段，清空
-              setSegments([])
-              setParsed(false)
-            }
-          } catch (error) {
-            console.error('恢复分段失败:', error)
-            setSegments([])
-            setParsed(false)
-          }
-        }
-        setEditMode(false)
-      }
-    }
-
-    setMode(newMode)
-
-    if (newMode === 'translate') {
-      setShowTranslationPanel(true)
-    }
-  }
+  // 移除 toggleMode 函数，模式切换改由列表底部按钮控制
 
 
   // 删除当前项目
@@ -276,7 +239,6 @@ function MainLayout() {
         clearProject()
         clearSegments()
         setChaptersWithSegments([])
-        setMode('read')
       } else {
         message.error('删除项目失败: ' + result.error)
       }
@@ -298,7 +260,6 @@ function MainLayout() {
 
     setEpubData(null)
     setEpubPath('')
-    setMode('read')
     setShowTranslationPanel(false)
     setFileName('')
     setMetadataTitle('')
@@ -443,12 +404,9 @@ function MainLayout() {
           <Button onClick={handleCloseFile} disabled={!epubData}>
             关闭
           </Button>
-          <Button type="primary" onClick={toggleMode}>
-            {mode === 'read' ? '编辑' : '阅读'}
-          </Button>
 
-          {/* 附注按钮：只在只读模式下显示 */}
-          {mode === 'read' && epubData && (
+          {/* 附注按钮：控制右侧面板显示/隐藏 */}
+          {epubData && (
             <Button
               icon={showTranslationPanel ? <CloseOutlined /> : <FileTextOutlined />}
               onClick={() => setShowTranslationPanel(!showTranslationPanel)}
@@ -475,11 +433,10 @@ function MainLayout() {
             <ContentViewer epubData={epubData} />
           </div>
 
-          {/* 右列：翻译面板（可折叠） */}
-          {(mode === 'translate' || showTranslationPanel) && (
+          {/* 右列：附注面板（可折叠） */}
+          {showTranslationPanel && (
             <div className="w-80 bg-white overflow-auto flex-shrink-0 border-l border-gray-200">
               <TranslationPanel
-                mode={mode}
                 currentChapterId={currentChapterId}
                 currentChapterHref={currentChapterHref}
               />

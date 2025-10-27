@@ -29,7 +29,7 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
   return (
     <Card
       size="small"
-      className={`mb-2 cursor-pointer transition-all duration-200 w-full ${
+      className={`mb-2 cursor-pointer transition-all duration-200 w-full relative ${
         isHovered
           ? 'bg-blue-50 border-blue-400 shadow-md'
           : 'bg-white border-gray-200 hover:border-gray-400'
@@ -39,6 +39,18 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
       onClick={onClick}
       styles={{ body: { padding: '8px 12px' } }}
     >
+      {/* 删除按钮 - 右上角悬停显示 */}
+      {showDelete && isHovered && (
+        <Button
+          type="text"
+          size="small"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={handleDelete}
+          className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 text-xs bg-white border border-gray-300 rounded-full shadow-sm hover:bg-red-50 hover:border-red-300 z-10"
+        />
+      )}
+
       <div className="flex flex-col gap-1" style={{ minHeight: '2.5rem' }}>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-500 font-medium">
@@ -49,16 +61,6 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
               <span className="text-xs text-gray-400">
                 {segment.textLength} 字符
               </span>
-            )}
-            {showDelete && (
-              <Button
-                type="text"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={handleDelete}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-              />
             )}
           </div>
         </div>

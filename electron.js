@@ -1,10 +1,16 @@
+console.log('🚀 electron.js 开始执行')
+
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
+
+console.log('📦 开始加载服务模块')
 const dbService = require('./services/database')
 const projectService = require('./services/project')
 const segmentService = require('./services/segment')
 const cacheService = require('./services/cacheService')
+console.log('✅ 服务模块加载完成')
+console.log('📂 projectService.projectsRoot 初始值:', projectService.projectsRoot)
 
 let mainWindow = null
 
@@ -49,13 +55,23 @@ function createWindow() {
   })
 }
 
+console.log('📝 注册 app.whenReady 回调')
+
 app.whenReady().then(() => {
+  console.log('✅ app.whenReady 触发！')
+
   // 初始化数据库
   const appDataPath = app.getPath('userData')
+  console.log('📁 应用数据目录:', appDataPath)
   dbService.initializeGlobalDB(appDataPath)
 
   // 初始化项目服务（使用当前工作目录）
-  projectService.initialize(process.cwd())
+  const currentDir = process.cwd()
+  console.log('📁 当前工作目录:', currentDir)
+  console.log('🔧 调用 projectService.initialize...')
+  projectService.initialize(currentDir)
+  console.log('✅ projectService.initialize 完成')
+  console.log('📂 projectService.projectsRoot:', projectService.projectsRoot)
 
   createWindow()
 })
@@ -133,7 +149,8 @@ ipcMain.handle('project:delete', async (event, projectId) => {
 ipcMain.handle('project:listFromDisk', async (event) => {
   try {
     if (!projectService.projectsRoot) {
-      throw new Error('项目根目录未初始化')
+      console.warn('项目根目录尚未初始化，返回空列表')
+      return { success: true, data: [] }
     }
 
     const projectsDir = projectService.projectsRoot
@@ -420,8 +437,7 @@ ipcMain.handle('segments:saveNotes', async (event, segmentId, translatedText, no
       throw new Error('缺少分段ID参数')
     }
 
-    const db = databaseService
-    db.updateSegmentNotes(segmentId, translatedText, notes)
+    dbService.updateSegmentNotes(segmentId, translatedText, notes)
 
     console.log('IPC: 保存译文和附注成功')
 
@@ -441,8 +457,7 @@ ipcMain.handle('segments:delete', async (event, segmentId) => {
       throw new Error('缺少分段ID参数')
     }
 
-    const db = databaseService
-    const deleted = db.deleteSegment(segmentId)
+    const deleted = dbService.deleteSegment(segmentId)
 
     if (!deleted) {
       throw new Error('分段不存在或已被删除')

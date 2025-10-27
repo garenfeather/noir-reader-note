@@ -10,12 +10,11 @@ import { useSegmentStore } from '../store/segmentStore'
 import SegmentList from './SegmentList'
 
 interface Props {
-  mode: 'read' | 'translate'
   currentChapterId?: string
   currentChapterHref?: string
 }
 
-function TranslationPanel({ mode, currentChapterId, currentChapterHref }: Props) {
+function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
   const { currentProject, setHasUnsavedChanges } = useProjectStore()
   const {
     segments,
@@ -27,10 +26,12 @@ function TranslationPanel({ mode, currentChapterId, currentChapterHref }: Props)
     chaptersWithSegments,
     setSegments,
     setLoading,
-    setParsed
+    setParsed,
+    deletedSegmentIds
   } = useSegmentStore()
 
-  const allowEditing = mode === 'translate'
+  // 始终允许操作，通过 isEditMode 控制编辑/只读
+  const allowEditing = true
 
   // 判断当前章节是否有持久化结果
   const hasPersisted = currentChapterHref ? chaptersWithSegments.has(currentChapterHref) : false
@@ -41,11 +42,7 @@ function TranslationPanel({ mode, currentChapterId, currentChapterHref }: Props)
     return false
   }
 
-  useEffect(() => {
-    if (!allowEditing && isEditMode) {
-      setEditMode(false)
-    }
-  }, [allowEditing, isEditMode, setEditMode])
+  // 移除 allowEditing 检查，编辑模式由底部按钮控制
 
   // 接受分段结果
   const handleAccept = async () => {
@@ -72,6 +69,23 @@ function TranslationPanel({ mode, currentChapterId, currentChapterHref }: Props)
     }
 
     try {
+      // 1. 先删除标记删除的分段
+      if (deletedSegmentIds.length > 0) {
+        console.log('🗑️ 开始删除标记的分段:', deletedSegmentIds)
+        for (const segmentId of deletedSegmentIds) {
+          try {
+            const deleteResult = await window.electronAPI.deleteSegment(segmentId)
+            if (!deleteResult.success) {
+              console.warn('删除分段失败:', segmentId, deleteResult.error)
+            }
+          } catch (error) {
+            console.error('删除分段异常:', segmentId, error)
+          }
+        }
+        console.log('✅ 已删除 ' + deletedSegmentIds.length + ' 个分段')
+      }
+
+      // 2. 保存当前分段列表
       console.log('📤 调用 window.electronAPI.saveSegments...')
       const result = await window.electronAPI.saveSegments(
         currentProject.id,
@@ -244,7 +258,6 @@ function TranslationPanel({ mode, currentChapterId, currentChapterHref }: Props)
           onResegment={handleResegment}
           onSegment={handleSegment}
           allowEditing={allowEditing}
-          mode={mode}
           hasPersisted={hasPersisted}
         />
       </div>

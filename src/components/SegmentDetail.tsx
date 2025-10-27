@@ -8,6 +8,7 @@ import { ArrowLeftOutlined, TranslationOutlined, SaveOutlined } from '@ant-desig
 import { useEffect, useState } from 'react'
 import { Segment, Note } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
+import { useSegmentStore } from '../store/segmentStore'
 import TranslationSection from './TranslationSection'
 import NotesSection from './NotesSection'
 
@@ -15,9 +16,10 @@ interface Props {
   segment: Segment
   index: number
   onBack: () => void
+  allowEdit?: boolean // 是否允许编辑（附注模式下的编辑状态）
 }
 
-function SegmentDetail({ segment, index, onBack }: Props) {
+function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
   const [text, setText] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
@@ -26,6 +28,7 @@ function SegmentDetail({ segment, index, onBack }: Props) {
   const [notes, setNotes] = useState<Note[] | null>(segment.notes || null)
   const [hasChanges, setHasChanges] = useState(false)
   const { currentProject } = useProjectStore()
+  const { updateSegmentContent } = useSegmentStore()
 
   useEffect(() => {
     // 从 XHTML 中读取分段文本
@@ -105,6 +108,8 @@ function SegmentDetail({ segment, index, onBack }: Props) {
       if (result.success) {
         message.success('保存成功')
         setHasChanges(false)
+        // 更新 store 中的数据
+        updateSegmentContent(segment.id, translatedText, notes)
       } else {
         message.error('保存失败: ' + (result.error || '未知错误'))
       }
@@ -161,62 +166,62 @@ function SegmentDetail({ segment, index, onBack }: Props) {
           size="small"
         />
         <h3 className="font-semibold">段落 {index + 1}</h3>
-        <div className="flex-1" />
-        <Button
-          icon={<TranslationOutlined />}
-          onClick={handleTranslate}
-          loading={isTranslating}
-          disabled={!text || isLoading}
-          size="small"
-        >
-          翻译
-        </Button>
-        <Button
-          type="primary"
-          icon={<SaveOutlined />}
-          onClick={handleSave}
-          loading={isSaving}
-          disabled={!hasChanges}
-          size="small"
-        >
-          保存
-        </Button>
-        {isLoading && <Spin size="small" />}
+        {isLoading && <Spin size="small" className="ml-auto" />}
       </div>
 
       {/* 段落详情内容 */}
       <div className="flex-1 overflow-auto p-4">
-        {/* 基本信息 */}
-        <div className="mb-4 pb-4 border-b border-gray-200">
-          <div className="text-xs text-gray-500 space-y-1">
-            <div>段落编号: {index + 1}</div>
-            {text && <div>字符数: {text.length}</div>}
-            <div>位置: {segment.position}</div>
-          </div>
-        </div>
-
         {/* 译文区域 */}
         <TranslationSection
           translatedText={translatedText}
           onChange={setTranslatedText}
+          allowEdit={allowEdit}
         />
 
         {/* 附注区域 */}
         <NotesSection
           notes={notes}
           onNotesChange={setNotes}
+          allowEdit={allowEdit}
         />
 
         {/* 原文内容 */}
         {text && (
           <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">原文</h4>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">
+              原文{text.length > 0 && `（字符数 ${text.length}）`}
+            </h4>
             <div className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap p-3 bg-gray-50 rounded border border-gray-200">
               {text}
             </div>
           </div>
         )}
       </div>
+
+      {/* 底部操作按钮 - 只在编辑模式下显示 */}
+      {allowEdit && (
+        <div className="border-t border-gray-200 p-4 bg-white">
+          <div className="w-full flex justify-center gap-3">
+            <Button
+              icon={<TranslationOutlined />}
+              onClick={handleTranslate}
+              loading={isTranslating}
+              disabled={!text || isLoading}
+            >
+              翻译
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSave}
+              loading={isSaving}
+              disabled={!hasChanges}
+            >
+              保存
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

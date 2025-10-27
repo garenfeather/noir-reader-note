@@ -23,12 +23,23 @@ class ProjectService {
    * 初始化项目根目录
    */
   initialize(appPath) {
+    console.log('🔧 ProjectService.initialize 被调用, appPath:', appPath)
+
+    if (!appPath) {
+      console.error('❌ appPath 为空，无法初始化项目根目录')
+      return
+    }
+
     // 项目保存在应用根目录的projects文件夹
     this.projectsRoot = path.join(appPath, 'projects')
 
+    console.log('📁 项目根目录设置为:', this.projectsRoot)
+
     if (!fs.existsSync(this.projectsRoot)) {
       fs.mkdirSync(this.projectsRoot, { recursive: true })
-      console.log('创建项目根目录:', this.projectsRoot)
+      console.log('✅ 创建项目根目录:', this.projectsRoot)
+    } else {
+      console.log('✅ 项目根目录已存在:', this.projectsRoot)
     }
   }
 
@@ -80,6 +91,15 @@ class ProjectService {
    */
   async createProject(epubPath, epubData, metadata = null, forceCreate = false) {
     try {
+      console.log('🚀 createProject 被调用')
+      console.log('📂 this.projectsRoot:', this.projectsRoot)
+
+      // 0. 检查项目根目录是否已初始化
+      if (!this.projectsRoot) {
+        console.error('❌ projectsRoot 为空！')
+        throw new Error('项目服务未初始化，请重启应用')
+      }
+
       // 1. 生成项目ID
       const projectId = this.generateProjectId(epubData, metadata, epubPath)
 
@@ -119,11 +139,11 @@ class ProjectService {
       console.log('EPUB解压完成:', extractedPath)
 
       // 7. 创建数据库记录
-      const epubName = path.basename(epubPath, '.epub')
+      const epubName = epubPath ? path.basename(epubPath, '.epub') : 'untitled'
       const project = {
         id: projectId,
         epubName: epubName,
-        epubPath: epubPath,
+        epubPath: epubPath || '',
         projectPath: projectPath,
         metadata: metadata
       }
