@@ -580,6 +580,25 @@ class DatabaseService {
   }
 
   /**
+   * 删除单个分段
+   * @param {string} segmentId - 分段ID
+   */
+  deleteSegment(segmentId) {
+    const stmt = this.db.prepare(`
+      DELETE FROM segments WHERE id = ?
+    `)
+
+    try {
+      const result = stmt.run(segmentId)
+      console.log('分段删除成功:', segmentId, '影响行数:', result.changes)
+      return result.changes > 0
+    } catch (error) {
+      console.error('删除分段失败:', error)
+      throw error
+    }
+  }
+
+  /**
    * 删除项目（级联删除分段）
    */
   deleteProject(projectId) {

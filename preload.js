@@ -33,4 +33,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('segments:translate', originalText),
   saveSegmentNotes: (segmentId, translatedText, notes) =>
     ipcRenderer.invoke('segments:saveNotes', segmentId, translatedText, notes),
+  deleteSegment: (segmentId) =>
+    ipcRenderer.invoke('segments:delete', segmentId),
 })

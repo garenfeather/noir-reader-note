@@ -431,3 +431,28 @@ ipcMain.handle('segments:saveNotes', async (event, segmentId, translatedText, no
     return { success: false, error: error.message }
   }
 })
+
+// IPC 处理：删除分段
+ipcMain.handle('segments:delete', async (event, segmentId) => {
+  try {
+    console.log('IPC segments:delete 收到请求', { segmentId })
+
+    if (!segmentId) {
+      throw new Error('缺少分段ID参数')
+    }
+
+    const db = databaseService
+    const deleted = db.deleteSegment(segmentId)
+
+    if (!deleted) {
+      throw new Error('分段不存在或已被删除')
+    }
+
+    console.log('IPC: 删除分段成功')
+
+    return { success: true }
+  } catch (error) {
+    console.error('IPC删除分段失败:', error)
+    return { success: false, error: error.message }
+  }
+})

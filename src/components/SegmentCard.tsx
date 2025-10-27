@@ -3,7 +3,8 @@
  * 显示单个段落的预览文字（从数据库加载）
  */
 
-import { Card } from 'antd'
+import { Card, Button } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
 import { Segment } from '../types/segment'
 
 interface Props {
@@ -13,9 +14,18 @@ interface Props {
   onMouseEnter: () => void
   onMouseLeave: () => void
   onClick: () => void
+  onDelete?: (segmentId: string) => void
+  showDelete?: boolean
 }
 
-function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, onClick }: Props) {
+function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, onClick, onDelete, showDelete = false }: Props) {
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation() // 阻止事件冒泡到卡片的 onClick
+    if (onDelete) {
+      onDelete(segment.id)
+    }
+  }
+
   return (
     <Card
       size="small"
@@ -34,11 +44,23 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
           <span className="text-xs text-gray-500 font-medium">
             段落 {index + 1}
           </span>
-          {segment.textLength !== undefined && (
-            <span className="text-xs text-gray-400">
-              {segment.textLength} 字符
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {segment.textLength !== undefined && (
+              <span className="text-xs text-gray-400">
+                {segment.textLength} 字符
+              </span>
+            )}
+            {showDelete && (
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={handleDelete}
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+              />
+            )}
+          </div>
         </div>
         {segment.preview && (
           <div

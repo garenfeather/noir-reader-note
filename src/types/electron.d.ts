@@ -53,6 +53,10 @@ export interface ElectronAPI {
     translatedText: string | null,
     notes: Note[] | null
   ) => Promise<{ success: boolean; error?: string }>
+
+  deleteSegment: (
+    segmentId: string
+  ) => Promise<{ success: boolean; error?: string }>
 }
 
 declare global {

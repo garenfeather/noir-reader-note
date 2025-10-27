@@ -3,8 +3,8 @@
  * 显示所有分段卡片
  */
 
-import { List, Spin, Empty, Button, Space } from 'antd'
-import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined } from '@ant-design/icons'
+import { List, Spin, Empty, Button, Space, Modal, message } from 'antd'
+import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { useEffect, useRef, useCallback } from 'react'
 import { useSegmentStore } from '../store/segmentStore'
 import { useBookStore } from '../store/bookStore'
@@ -17,6 +17,8 @@ import {
   flashHighlight,
   generateCFIFromXPath
 } from '../utils/highlightHelper'
+
+const { confirm } = Modal
 
 interface Props {
   onAccept: () => void
@@ -39,7 +41,8 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     isEditMode,
     setHoveredSegment,
     setSelectedSegment,
-    setEditMode
+    setEditMode,
+    setSegments
   } = useSegmentStore()
 
   const { rendition } = useBookStore()
@@ -275,6 +278,40 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     })
   }
 
+  // 处理删除分段
+  const handleDelete = (segmentId: string) => {
+    confirm({
+      title: '确认删除',
+      icon: <ExclamationCircleOutlined />,
+      content: '确定要删除这个附注吗？此操作不可恢复。',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          if (!window.electronAPI?.deleteSegment) {
+            message.error('删除功能不可用')
+            return
+          }
+
+          const result = await window.electronAPI.deleteSegment(segmentId)
+
+          if (result.success) {
+            // 从当前列表中移除被删除的 segment
+            const updatedSegments = visibleSegments.filter(s => s.id !== segmentId)
+            setSegments(updatedSegments)
+            message.success('删除成功')
+          } else {
+            message.error('删除失败: ' + (result.error || '未知错误'))
+          }
+        } catch (error) {
+          console.error('删除异常:', error)
+          message.error('删除异常')
+        }
+      }
+    })
+  }
+
   // 获取选中的段落
   const selectedSegment = visibleSegments.find(s => s.id === selectedSegmentId)
   const selectedIndex = selectedSegment
@@ -347,6 +384,8 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                 onMouseEnter={() => setHoveredSegment(segment.id)}
                 onMouseLeave={() => setHoveredSegment(null)}
                 onClick={() => handleCardClick(segment)}
+                onDelete={handleDelete}
+                showDelete={mode === 'read'}
               />
             </List.Item>
           )}
