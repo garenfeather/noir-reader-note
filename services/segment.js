@@ -158,9 +158,34 @@ class SegmentService {
 
   /**
    * 获取元素的文本内容
+   * 将 <sup> 标签转换为括号形式
    */
   getTextContent(element) {
-    return element.textContent || ''
+    if (!element) return ''
+
+    let result = ''
+
+    // 遍历所有子节点
+    for (const node of element.childNodes) {
+      if (node.nodeType === node.TEXT_NODE) {
+        // 文本节点，直接添加
+        result += node.textContent
+      } else if (node.nodeType === node.ELEMENT_NODE) {
+        // 元素节点
+        if (node.tagName.toLowerCase() === 'sup') {
+          // sup 标签转为括号形式
+          const supText = node.textContent || ''
+          if (supText) {
+            result += `(${supText})`
+          }
+        } else {
+          // 其他标签递归处理
+          result += this.getTextContent(node)
+        }
+      }
+    }
+
+    return result
   }
 
   /**
