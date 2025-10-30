@@ -61,13 +61,13 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
             段落 {index + 1}
           </span>
           <div className="flex items-center gap-2">
-            {/* 书签按钮 */}
-            {isReadOnly && <BookmarkButton segmentId={segment.id} isReadOnly={isReadOnly} />}
             {segment.textLength !== undefined && (
               <span className="text-xs text-gray-400">
                 {segment.textLength} 字符
               </span>
             )}
+            {/* 书签按钮 */}
+            {isReadOnly && <BookmarkButton segmentId={segment.id} isReadOnly={isReadOnly} />}
           </div>
         </div>
         {segment.preview && (
