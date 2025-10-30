@@ -430,7 +430,10 @@ function MainLayout() {
           {/* 左列：未打开文件时显示项目列表，打开后显示目录 */}
           <div className="w-64 border-r border-gray-200 bg-white overflow-auto flex-shrink-0">
             {epubData ? (
-              <TableOfContents epubData={epubData} />
+              <TableOfContents
+                epubData={epubData}
+                currentChapterHref={currentChapterHref}
+              />
             ) : (
               <ProjectList onSelectProject={openProjectFromList} />
             )}
