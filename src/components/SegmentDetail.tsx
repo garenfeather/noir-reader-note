@@ -3,8 +3,8 @@
  * 显示段落的完整信息（第一次点击时从XHTML读取并缓存）
  */
 
-import { Button, Spin } from 'antd'
-import { ArrowLeftOutlined, TranslationOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Spin, Modal } from 'antd'
+import { ArrowLeftOutlined, TranslationOutlined, PlusOutlined, ClearOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Segment, Note } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
@@ -120,6 +120,21 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
     }
   }
 
+  // 处理清空译文和附注
+  const handleClear = () => {
+    Modal.confirm({
+      title: '确认清空',
+      content: '确定要清空当前段落的所有译文和附注吗？',
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: () => {
+        setTranslatedText(null)
+        setNotes(null)
+      }
+    })
+  }
+
   return (
     <div className="h-full flex flex-col bg-white">
       {/* 顶部导航栏 */}
@@ -180,7 +195,7 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
               loading={isTranslating}
               disabled={!text || isLoading}
             >
-              翻译
+              {translatedText ? '重新翻译' : '翻译'}
             </Button>
             {(!notes || notes.length === 0) && (
               <Button
@@ -188,6 +203,15 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
                 onClick={() => setIsAddingNote(true)}
               >
                 添加附注
+              </Button>
+            )}
+            {(translatedText || (notes && notes.length > 0)) && (
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleClear}
+                danger
+              >
+                清空
               </Button>
             )}
           </div>
