@@ -11,13 +11,17 @@
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "adm-zip": "^0.5.16",
     "antd": "^5.12.0",
+    "axios": "^1.13.1",
     "better-sqlite3": "^12.4.1",
     "epubjs": "^0.3.93",
     "jsdom": "24.1.3",
+    "proxy-agent": "^6.5.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "undici": "^7.16.0",
     "uuid": "^13.0.0",
     "zustand": "^4.5.0"
   },

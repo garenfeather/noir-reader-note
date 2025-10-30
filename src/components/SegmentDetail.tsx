@@ -3,8 +3,8 @@
  * 显示段落的完整信息（第一次点击时从XHTML读取并缓存）
  */
 
-import { Button, Spin } from 'antd'
-import { ArrowLeftOutlined, TranslationOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Spin, Modal, message } from 'antd'
+import { ArrowLeftOutlined, TranslationOutlined, PlusOutlined, ClearOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Segment, Note } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
@@ -96,10 +96,12 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
   const handleTranslate = async () => {
     try {
       if (!text) {
+        message.error('原文内容为空，无法翻译')
         return
       }
 
       if (!window.electronAPI?.translateSegment) {
+        message.error('翻译功能不可用')
         return
       }
 
@@ -107,17 +109,44 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
 
       const result = await window.electronAPI.translateSegment(text)
 
-      if (result.success && result.data) {
-        setTranslatedText(result.data.translatedText)
-        // 追加新附注到现有附注列表
-        const newNotes = [...(notes || []), ...result.data.notes]
-        setNotes(newNotes)
+      // 检查响应成功状态
+      if (!result.success) {
+        message.error(result.error || '翻译失败')
+        return
       }
+
+      // 检查返回数据格式
+      if (!result.data || typeof result.data.translatedText !== 'string') {
+        message.error('翻译结果格式错误')
+        return
+      }
+
+      // 成功获取翻译结果
+      setTranslatedText(result.data.translatedText)
+      // 追加新附注到现有附注列表
+      const newNotes = [...(notes || []), ...result.data.notes]
+      setNotes(newNotes)
     } catch (error) {
       console.error('翻译异常:', error)
+      message.error('翻译请求失败：' + (error instanceof Error ? error.message : '未知错误'))
     } finally {
       setIsTranslating(false)
     }
+  }
+
+  // 处理清空译文和附注
+  const handleClear = () => {
+    Modal.confirm({
+      title: '确认清空',
+      content: '确定要清空当前段落的所有译文和附注吗？',
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: () => {
+        setTranslatedText(null)
+        setNotes(null)
+      }
+    })
   }
 
   return (
@@ -180,7 +209,7 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
               loading={isTranslating}
               disabled={!text || isLoading}
             >
-              翻译
+              {translatedText ? '重新翻译' : '翻译'}
             </Button>
             {(!notes || notes.length === 0) && (
               <Button
@@ -188,6 +217,15 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
                 onClick={() => setIsAddingNote(true)}
               >
                 添加附注
+              </Button>
+            )}
+            {(translatedText || (notes && notes.length > 0)) && (
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleClear}
+                danger
+              >
+                清空
               </Button>
             )}
           </div>

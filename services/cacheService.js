@@ -62,7 +62,8 @@ class CacheService {
       return null
     }
 
-    const cacheKey = `${chapterHref}:${xpath}`
+    // v2: 添加版本号以支持 sup 标签转括号格式
+    const cacheKey = `v2:${chapterHref}:${xpath}`
 
     const stmt = db.prepare(`
       SELECT full_text, expires_at FROM segment_text_cache
@@ -106,7 +107,8 @@ class CacheService {
       return
     }
 
-    const cacheKey = `${chapterHref}:${xpath}`
+    // v2: 添加版本号以支持 sup 标签转括号格式
+    const cacheKey = `v2:${chapterHref}:${xpath}`
 
     // 计算1小时后的过期时间
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()

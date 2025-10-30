@@ -62,6 +62,9 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
   // 跳转状态跟踪
   const isJumpingRef = useRef(false)
   const jumpCleanupRef = useRef<(() => void) | null>(null)
+  // 滚动位置保存
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const savedScrollPosition = useRef<number>(0)
 
   // 初始化高亮主题：监听 rendition 变化
   useEffect(() => {
@@ -117,6 +120,19 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
       }
     }
   }, [removeHoverHighlights])
+
+  // 监听详情页返回，恢复滚动位置
+  useEffect(() => {
+    // 当从详情页返回列表时（selectedSegmentId 从有值变为 null），恢复滚动位置
+    if (!selectedSegmentId && scrollContainerRef.current && savedScrollPosition.current > 0) {
+      // 使用 setTimeout 确保 DOM 已经渲染完成
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = savedScrollPosition.current
+        }
+      }, 0)
+    }
+  }, [selectedSegmentId])
 
   // 处理接受（分割状态）
   const handleAccept = () => {
@@ -247,6 +263,10 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
         id: segment.id,
         xpath: segment.xpath
       })
+      // 保存滚动位置
+      if (scrollContainerRef.current) {
+        savedScrollPosition.current = scrollContainerRef.current.scrollTop
+      }
       setHoveredSegment(null)
       setSelectedSegment(segment.id)
       return
@@ -266,9 +286,18 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
         xpath: segment.xpath,
         isInvalid: isInvalidCFI
       })
+      // 保存滚动位置
+      if (scrollContainerRef.current) {
+        savedScrollPosition.current = scrollContainerRef.current.scrollTop
+      }
       setHoveredSegment(null)
       setSelectedSegment(segment.id)
       return
+    }
+
+    // 保存滚动位置
+    if (scrollContainerRef.current) {
+      savedScrollPosition.current = scrollContainerRef.current.scrollTop
     }
 
     // 清除 hover 状态
@@ -401,7 +430,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
   return (
     <div className="h-full flex flex-col">
       {/* 分段列表 */}
-      <div className="flex-1 overflow-auto px-4 py-2">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto px-4 py-2">
         <List
           dataSource={visibleSegments}
           renderItem={(segment, index) => (

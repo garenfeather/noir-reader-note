@@ -38,6 +38,9 @@ release/
 # Projects
 projects/
 
+# Translation
+translation/
+
 # Database files
 *.db
 *.db-journal
