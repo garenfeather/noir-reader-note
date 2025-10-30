@@ -92,6 +92,27 @@ class DatabaseService {
       ON segments(project_id, chapter_id, position)
     `)
 
+    // 创建书签表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        segment_id TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (segment_id) REFERENCES segments(id) ON DELETE CASCADE
+      )
+    `)
+
+    // 创建书签索引
+    this.db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_segment
+      ON bookmarks(segment_id)
+    `)
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_created
+      ON bookmarks(created_at)
+    `)
+
     console.log('数据库表结构创建完成')
   }
 
@@ -640,6 +661,115 @@ class DatabaseService {
     } catch (error) {
       console.error('删除项目失败:', error)
       throw error
+    }
+  }
+
+  /**
+   * 添加书签
+   * @param {string} segmentId - 分段ID
+   * @returns {number|null} 书签ID，如果已存在则返回null
+   */
+  addBookmark(segmentId) {
+    const stmt = this.db.prepare(`
+      INSERT INTO bookmarks (segment_id)
+      VALUES (?)
+    `)
+
+    try {
+      const result = stmt.run(segmentId)
+      console.log('书签添加成功:', segmentId, '书签ID:', result.lastInsertRowid)
+      return result.lastInsertRowid
+    } catch (error) {
+      // 如果是唯一索引冲突（已存在），返回null
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.message.includes('UNIQUE')) {
+        console.log('书签已存在:', segmentId)
+        return null
+      }
+      console.error('添加书签失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 删除书签
+   * @param {string} segmentId - 分段ID
+   * @returns {boolean} 是否删除成功
+   */
+  removeBookmark(segmentId) {
+    const stmt = this.db.prepare(`
+      DELETE FROM bookmarks WHERE segment_id = ?
+    `)
+
+    try {
+      const result = stmt.run(segmentId)
+      console.log('书签删除成功:', segmentId, '影响行数:', result.changes)
+      return result.changes > 0
+    } catch (error) {
+      console.error('删除书签失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 获取所有书签（JOIN segments表获取完整信息）
+   * @returns {Array} 书签列表
+   */
+  getBookmarks() {
+    const stmt = this.db.prepare(`
+      SELECT
+        b.id as bookmark_id,
+        b.created_at as bookmarked_at,
+        s.*
+      FROM bookmarks b
+      INNER JOIN segments s ON b.segment_id = s.id
+      ORDER BY s.chapter_id, s.position
+    `)
+
+    try {
+      const rows = stmt.all()
+      return rows.map(row => ({
+        bookmarkId: row.bookmark_id,
+        bookmarkedAt: row.bookmarked_at,
+        segment: {
+          id: row.id,
+          projectId: row.project_id,
+          chapterId: row.chapter_id,
+          chapterHref: row.chapter_href,
+          xpath: row.xpath,
+          cfiRange: row.cfi_range,
+          position: row.position,
+          isEmpty: row.is_empty === 1,
+          parentSegmentId: row.parent_segment_id,
+          preview: row.preview,
+          textLength: row.text_length,
+          createdAt: row.created_at,
+          translatedText: row.translated_text,
+          notes: row.notes ? JSON.parse(row.notes) : null,
+          isModified: row.is_modified === 1
+        }
+      }))
+    } catch (error) {
+      console.error('获取书签列表失败:', error)
+      return []
+    }
+  }
+
+  /**
+   * 检查是否已收藏
+   * @param {string} segmentId - 分段ID
+   * @returns {boolean} 是否已收藏
+   */
+  isBookmarked(segmentId) {
+    const stmt = this.db.prepare(`
+      SELECT id FROM bookmarks WHERE segment_id = ?
+    `)
+
+    try {
+      const result = stmt.get(segmentId)
+      return !!result
+    } catch (error) {
+      console.error('检查书签状态失败:', error)
+      return false
     }
   }
 

@@ -43,4 +43,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('translation:getConfig'),
   saveTranslationConfig: (config) =>
     ipcRenderer.invoke('translation:saveConfig', config),
+
+  // 书签管理
+  addBookmark: (segmentId) =>
+    ipcRenderer.invoke('bookmarks:add', segmentId),
+  removeBookmark: (segmentId) =>
+    ipcRenderer.invoke('bookmarks:remove', segmentId),
+  getBookmarks: () =>
+    ipcRenderer.invoke('bookmarks:getAll'),
+  isBookmarked: (segmentId) =>
+    ipcRenderer.invoke('bookmarks:isBookmarked', segmentId),
 })

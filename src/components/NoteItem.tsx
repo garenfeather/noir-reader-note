@@ -37,8 +37,6 @@ function NoteItem({ note, index, onUpdate, onDelete, allowEdit = true }: Props) 
   return (
     <div className="p-3 bg-gray-50 rounded border border-gray-200">
       <div className="flex items-start gap-2">
-        <span className="text-xs text-gray-500 font-mono mt-1">{index + 1}.</span>
-
         {isEditing ? (
           <div className="flex-1">
             <TextArea

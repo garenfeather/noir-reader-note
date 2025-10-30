@@ -49,3 +49,12 @@ export interface ParagraphElement {
   isEmpty: boolean
   index: number
 }
+
+/**
+ * 书签类型
+ */
+export interface Bookmark {
+  bookmarkId: number            // 书签ID
+  bookmarkedAt: string          // 收藏时间
+  segment: Segment              // 关联的分段完整信息
+}

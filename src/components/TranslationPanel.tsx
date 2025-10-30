@@ -1,18 +1,25 @@
 /**
  * 附注面板组件
- * 显示分段结果和编辑功能
+ * 显示分段结果和编辑功能，支持附注/书签视图切换
  */
 
-import { Empty, message } from 'antd'
-import { useEffect } from 'react'
+import { Empty, message, Dropdown, MenuProps } from 'antd'
+import { DownOutlined } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import { useSegmentStore } from '../store/segmentStore'
+import { useBookmarkStore } from '../store/bookmarkStore'
+import { useBookStore } from '../store/bookStore'
 import SegmentList from './SegmentList'
+import BookmarkList from './BookmarkList'
+import BookmarkDetail from './BookmarkDetail'
 
 interface Props {
   currentChapterId?: string
   currentChapterHref?: string
 }
+
+type ViewMode = 'segments' | 'bookmarks'
 
 function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
   const { currentProject, setHasUnsavedChanges } = useProjectStore()
@@ -28,8 +35,23 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
     setLoading,
     setParsed,
     deletedSegmentIds,
-    clearModifiedFlags
+    clearModifiedFlags,
+    segmentScrollTop,
+    saveScrollPosition: saveSegmentScrollPosition
   } = useSegmentStore()
+
+  const {
+    bookmarks,
+    selectedBookmarkId,
+    selectBookmark,
+    bookmarkScrollTop,
+    saveScrollPosition: saveBookmarkScrollPosition
+  } = useBookmarkStore()
+
+  const { jumpToCfi } = useBookStore()
+
+  // 视图模式状态
+  const [viewMode, setViewMode] = useState<ViewMode>('segments')
 
   // 始终允许操作，通过 isEditMode 控制编辑/只读
   const allowEditing = true
@@ -253,22 +275,77 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
     }
   }
 
+  // 视图切换处理
+  const handleViewChange = (newViewMode: ViewMode) => {
+    setViewMode(newViewMode)
+    // 切换时清空选中的书签
+    if (newViewMode === 'bookmarks') {
+      selectBookmark(null)
+    }
+  }
+
+  // 下拉菜单配置
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'segments',
+      label: '附注',
+      onClick: () => handleViewChange('segments')
+    },
+    {
+      key: 'bookmarks',
+      label: '书签',
+      onClick: () => handleViewChange('bookmarks')
+    }
+  ]
+
+  // 渲染书签详情或列表
+  const renderBookmarkView = () => {
+    if (selectedBookmarkId) {
+      const bookmark = bookmarks.find(b => b.bookmarkId === selectedBookmarkId)
+      if (bookmark) {
+        return (
+          <BookmarkDetail
+            bookmark={bookmark}
+            onBack={() => selectBookmark(null)}
+          />
+        )
+      }
+    }
+    return <BookmarkList />
+  }
+
   return (
     <div className="h-full flex flex-col">
+      {/* 标题区域 - 下拉菜单 */}
       <div className="border-b border-gray-200 px-4 py-3">
-        <h3 className="font-semibold">附注</h3>
+        <Dropdown
+          menu={{ items: menuItems, selectedKeys: [viewMode] }}
+          trigger={['hover']}
+        >
+          <div className="inline-flex items-center gap-2 cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors">
+            <h3 className="font-semibold">
+              {viewMode === 'segments' ? '附注' : '书签'}
+            </h3>
+            <DownOutlined className="text-xs text-gray-500" />
+          </div>
+        </Dropdown>
       </div>
 
+      {/* 内容区域 */}
       <div className="flex-1 overflow-hidden">
-        <SegmentList
-          onAccept={handleAccept}
-          onDiscard={handleDiscard}
-          onCancel={handleCancel}
-          onResegment={handleResegment}
-          onSegment={handleSegment}
-          allowEditing={allowEditing}
-          hasPersisted={hasPersisted}
-        />
+        {viewMode === 'segments' ? (
+          <SegmentList
+            onAccept={handleAccept}
+            onDiscard={handleDiscard}
+            onCancel={handleCancel}
+            onResegment={handleResegment}
+            onSegment={handleSegment}
+            allowEditing={allowEditing}
+            hasPersisted={hasPersisted}
+          />
+        ) : (
+          renderBookmarkView()
+        )}
       </div>
     </div>
   )

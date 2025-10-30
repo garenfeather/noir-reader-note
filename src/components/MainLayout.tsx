@@ -413,13 +413,13 @@ function MainLayout() {
             关闭
           </Button>
 
-          {/* 附注按钮：控制右侧面板显示/隐藏 */}
+          {/* 标注栏按钮：控制右侧面板显示/隐藏 */}
           {epubData && (
             <Button
               icon={showTranslationPanel ? <CloseOutlined /> : <FileTextOutlined />}
               onClick={() => setShowTranslationPanel(!showTranslationPanel)}
             >
-              附注
+              标注栏
             </Button>
           )}
         </Space>

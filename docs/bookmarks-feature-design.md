@@ -199,99 +199,42 @@ SELECT id FROM bookmarks WHERE segment_id = ?;
 
 ## 7. 实施步骤
 
-### Phase 1: 数据层（1-2天）
+### Phase 1: 完整功能实现
 
 **任务：**
-1. 在 `electron.js` 中添加 `bookmarks` 表创建逻辑
-2. 实现 4 个 API 方法（add/remove/get/isBookmarked）
-3. 在 `preload.js` 中暴露 IPC 接口
-4. 在 `src/types.ts` 中定义类型
+
+1. **数据层**
+   - 在 `electron.js` 中添加 `bookmarks` 表创建逻辑
+   - 实现 4 个 API 方法（add/remove/get/isBookmarked）
+   - 在 `preload.js` 中暴露 IPC 接口
+   - 在 `src/types.ts` 中定义类型
+
+2. **状态管理**
+   - 创建 `src/stores/bookmarkStore.ts`
+   - 实现所有状态和 actions
+   - 扩展 `segmentStore` 添加滚动位置状态
+
+3. **UI 组件**
+   - TranslationPanel：添加 viewMode 状态、下拉菜单、视图切换逻辑
+   - BookmarkButton：创建组件并在 SegmentList/SegmentDetail 中集成
+   - BookmarkList：实现按章节分组、悬停删除按钮
+   - BookmarkDetail：显示章节名称、只读内容、定位按钮
+
+4. **跨章跳转**
+   - 在 `readerStore` 中添加 `jumpToCfi` 方法
+   - 实现跨章跳转、高亮和滚动逻辑
+
+5. **样式优化**
+   - 实现所有组件样式
+   - 添加过渡动画
+   - 响应式适配
 
 **验收标准：**
-- 数据库正常创建表和索引
-- API 调用返回正确数据
-- 附注删除后书签自动消失
-
-### Phase 2: 状态管理（1-2天）
-
-**任务：**
-1. 创建 `src/stores/bookmarkStore.ts`
-2. 实现所有状态和 actions
-3. 扩展 `segmentStore` 添加滚动位置状态
-4. 测试状态同步
-
-**验收标准：**
-- bookmarkStore 正常工作
-- 添加/删除书签后列表实时更新
-- 切换视图时滚动位置保持
-
-### Phase 3: UI 组件（3-4天）
-
-**任务 3.1:** TranslationPanel 重构
-- 添加 viewMode 状态
-- 实现下拉菜单（Dropdown）
-- 实现视图切换逻辑
-- 保存/恢复滚动位置
-
-**任务 3.2:** BookmarkButton 组件
-- 创建组件并在 SegmentList/SegmentDetail 中集成
-- 实现收藏/已收藏状态切换
-- 添加点击事件处理
-
-**任务 3.3:** BookmarkList 组件
-- 实现按章节分组逻辑
-- 实现悬停显示删除按钮
-- 添加删除功能
-
-**任务 3.4:** BookmarkDetail 组件
-- 显示章节名称
-- 显示只读内容
-- 添加定位按钮
-
-**验收标准：**
-- 下拉菜单悬停自动展开
-- 切换视图时状态保持
-- 收藏按钮正确显示状态
-- 书签列表按章节分组
-- 详情页完全只读
-
-### Phase 4: 跨章跳转（1天）
-
-**任务：**
-1. 在 `readerStore` 中添加 `jumpToCfi` 方法
-2. 实现跨章跳转逻辑
-3. 添加高亮和滚动
-4. 测试跨章场景
-
-**验收标准：**
-- 点击"定位"按钮正确跳转
-- 目标文本高亮显示
-- 滚动到屏幕中央
-
-### Phase 5: 样式优化（1天）
-
-**任务：**
-1. 实现所有样式
-2. 调整间距、颜色、圆角
-3. 添加过渡动画
-4. 响应式适配
-
-**验收标准：**
-- 视觉效果符合设计
-- 动画流畅无卡顿
-- 各种状态样式正确
-
-### Phase 6: 集成测试（1天）
-
-**任务：**
-1. 端到端测试完整流程
-2. 测试边界情况
-3. 性能测试
-
-**验收标准：**
-- 所有功能正常工作
-- 无明显 bug
-- 性能可接受
+- 数据库表正常创建，API 正常工作
+- 书签增删改查功能完整
+- 视图切换流畅，滚动位置保持
+- 跨章定位准确，高亮显示正常
+- UI 符合设计规范，交互流畅
 
 ---
 
@@ -362,11 +305,6 @@ SELECT id FROM bookmarks WHERE segment_id = ?;
 
 ## 10. 预计工作量
 
-**总计：** 7-10 天（单人开发）
+**总计：** 按技术文档分步实现
 
-- Phase 1: 1-2天
-- Phase 2: 1-2天
-- Phase 3: 3-4天
-- Phase 4: 1天
-- Phase 5: 1天
-- Phase 6: 1天
+- Phase 1: 完整功能实现（数据层 → 状态管理 → UI 组件 → 跨章跳转 → 样式优化）

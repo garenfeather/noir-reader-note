@@ -3,14 +3,16 @@
  * 显示段落的完整信息（第一次点击时从XHTML读取并缓存）
  */
 
-import { Button, Spin, Modal, message } from 'antd'
+import { Button, Spin, Modal, message, Card } from 'antd'
 import { ArrowLeftOutlined, TranslationOutlined, PlusOutlined, ClearOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Segment, Note } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
 import { useSegmentStore } from '../store/segmentStore'
+import { useBookStore } from '../store/bookStore'
 import TranslationSection from './TranslationSection'
 import NotesSection from './NotesSection'
+import BookmarkButton from './BookmarkButton'
 
 interface Props {
   segment: Segment
@@ -30,6 +32,16 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
   const [originalSegment] = useState(segment) // 保存原始segment用于比较
   const { currentProject } = useProjectStore()
   const { updateSegmentContent } = useSegmentStore()
+  const { jumpToCfi } = useBookStore()
+
+  // 处理原文点击跳转
+  const handleOriginalTextClick = async () => {
+    if (segment.cfiRange) {
+      await jumpToCfi(segment.cfiRange)
+    } else {
+      message.warning('该段落缺少定位信息')
+    }
+  }
 
   useEffect(() => {
     // 从 XHTML 中读取分段文本
@@ -165,7 +177,11 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
             <span className="inline-block w-2.5 h-2.5 bg-red-500 rounded-full shadow-sm" title="有未保存的变更"></span>
           )}
         </div>
-        {isLoading && <Spin size="small" className="ml-auto" />}
+        <div className="ml-auto flex items-center gap-2">
+          {/* 书签按钮 - 只在只读模式显示 */}
+          <BookmarkButton segmentId={segment.id} isReadOnly={!allowEdit} />
+          {isLoading && <Spin size="small" />}
+        </div>
       </div>
 
       {/* 段落详情内容 */}
@@ -186,16 +202,18 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
           onAddComplete={() => setIsAddingNote(false)}
         />
 
-        {/* 原文内容 */}
+        {/* 原文内容 - 可点击跳转 */}
         {text && (
-          <div className="mb-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">
-              原文{text.length > 0 && `（字符数 ${text.length}）`}
-            </h4>
-            <div className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap p-3 bg-gray-50 rounded border border-gray-200">
+          <Card
+            title={`原文${text.length > 0 ? `（字符数 ${text.length}）` : ''}`}
+            size="small"
+            className="bg-gray-50 cursor-pointer transition-all hover:border-blue-500 hover:shadow-md mb-4"
+            onClick={handleOriginalTextClick}
+          >
+            <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
               {text}
             </div>
-          </div>
+          </Card>
         )}
       </div>
 

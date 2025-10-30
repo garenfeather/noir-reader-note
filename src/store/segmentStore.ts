@@ -43,6 +43,9 @@ interface SegmentState {
   // 待删除的分段ID列表（点击保存时才真正删除）
   deletedSegmentIds: string[]
 
+  // 附注列表滚动位置
+  segmentScrollTop: number
+
   // Actions
   setSegments: (segments: Segment[]) => void
   updateSegmentContent: (segmentId: string, translatedText: string | null, notes: any[] | null) => void
@@ -59,6 +62,7 @@ interface SegmentState {
   markSegmentDeleted: (segmentId: string) => void
   clearSegments: () => void
   clearModifiedFlags: () => void
+  saveScrollPosition: (scrollTop: number) => void
 }
 
 export const useSegmentStore = create<SegmentState>((set, get) => ({
@@ -74,6 +78,7 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
   isEditMode: false,
   editSource: null,
   deletedSegmentIds: [],
+  segmentScrollTop: 0,
 
   setSegments: (segments) => {
     const visibleSegments = segments.filter(s => !s.isEmpty)
@@ -158,5 +163,9 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
     const segments = get().segments.map(s => ({ ...s, isModified: false }))
     const visibleSegments = segments.filter(s => !s.isEmpty)
     set({ segments, visibleSegments, deletedSegmentIds: [] })
+  },
+
+  saveScrollPosition: (scrollTop: number) => {
+    set({ segmentScrollTop: scrollTop })
   }
 }))

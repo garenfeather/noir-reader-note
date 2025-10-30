@@ -444,6 +444,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                 onClick={() => handleCardClick(segment)}
                 onDelete={handleDelete}
                 showDelete={isEditMode}
+                isReadOnly={!isEditMode}
               />
             </List.Item>
           )}

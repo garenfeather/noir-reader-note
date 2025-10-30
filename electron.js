@@ -508,3 +508,87 @@ ipcMain.handle('translation:saveConfig', async (event, config) => {
     return { success: false, error: error.message }
   }
 })
+
+// IPC 处理：添加书签
+ipcMain.handle('bookmarks:add', async (event, segmentId) => {
+  try {
+    console.log('IPC bookmarks:add 收到请求', { segmentId })
+
+    if (!segmentId) {
+      throw new Error('缺少分段ID参数')
+    }
+
+    const bookmarkId = dbService.addBookmark(segmentId)
+
+    if (bookmarkId === null) {
+      return { success: false, error: '该附注已收藏' }
+    }
+
+    console.log('IPC: 添加书签成功')
+
+    return { success: true, data: { bookmarkId } }
+  } catch (error) {
+    console.error('IPC添加书签失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// IPC 处理：删除书签
+ipcMain.handle('bookmarks:remove', async (event, segmentId) => {
+  try {
+    console.log('IPC bookmarks:remove 收到请求', { segmentId })
+
+    if (!segmentId) {
+      throw new Error('缺少分段ID参数')
+    }
+
+    const removed = dbService.removeBookmark(segmentId)
+
+    if (!removed) {
+      return { success: false, error: '书签不存在' }
+    }
+
+    console.log('IPC: 删除书签成功')
+
+    return { success: true }
+  } catch (error) {
+    console.error('IPC删除书签失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// IPC 处理：获取书签列表
+ipcMain.handle('bookmarks:getAll', async (event) => {
+  try {
+    console.log('IPC bookmarks:getAll 收到请求')
+
+    const bookmarks = dbService.getBookmarks()
+
+    console.log('IPC: 获取书签列表成功，共', bookmarks.length, '条')
+
+    return { success: true, data: bookmarks }
+  } catch (error) {
+    console.error('IPC获取书签列表失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// IPC 处理：检查是否已收藏
+ipcMain.handle('bookmarks:isBookmarked', async (event, segmentId) => {
+  try {
+    console.log('IPC bookmarks:isBookmarked 收到请求', { segmentId })
+
+    if (!segmentId) {
+      throw new Error('缺少分段ID参数')
+    }
+
+    const isBookmarked = dbService.isBookmarked(segmentId)
+
+    console.log('IPC: 检查书签状态完成，结果:', isBookmarked)
+
+    return { success: true, data: { isBookmarked } }
+  } catch (error) {
+    console.error('IPC检查书签状态失败:', error)
+    return { success: false, error: error.message }
+  }
+})
