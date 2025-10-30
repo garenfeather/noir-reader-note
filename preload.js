@@ -37,4 +37,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('segments:delete', segmentId),
   clearChapterSegments: (projectId, chapterId) =>
     ipcRenderer.invoke('segments:clearChapter', projectId, chapterId),
+
+  // 翻译配置
+  getTranslationConfig: () =>
+    ipcRenderer.invoke('translation:getConfig'),
+  saveTranslationConfig: (config) =>
+    ipcRenderer.invoke('translation:saveConfig', config),
 })

@@ -9,6 +9,7 @@ const dbService = require('./services/database')
 const projectService = require('./services/project')
 const segmentService = require('./services/segment')
 const cacheService = require('./services/cacheService')
+const translationService = require('./services/translationService')
 console.log('✅ 服务模块加载完成')
 console.log('📂 projectService.projectsRoot 初始值:', projectService.projectsRoot)
 
@@ -363,7 +364,7 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
   }
 })
 
-// IPC 处理：翻译分段（Mock 实现）
+// IPC 处理：翻译分段（使用Gemini API）
 ipcMain.handle('segments:translate', async (event, originalText) => {
   try {
     console.log('IPC segments:translate 收到请求', { textLength: originalText?.length })
@@ -372,49 +373,32 @@ ipcMain.handle('segments:translate', async (event, originalText) => {
       throw new Error('缺少原文参数')
     }
 
-    // Mock 翻译逻辑：
-    // 1. 译文 = 原文（保持不变）
-    const translatedText = originalText
+    // 调用翻译服务
+    console.log('IPC: 正在调用翻译服务...')
+    const result = await translationService.translate(originalText)
 
-    // 2. 附注 = 随机提取词汇生成
-    const notes = []
-
-    // 简单分词（按空格和标点分割）
-    const words = originalText
-      .split(/[\s\p{P}]+/u)
-      .filter(word => word.length > 3) // 只保留长度 > 3 的词
-      .slice(0, 10) // 最多取 10 个词
-
-    // 随机选择 2-4 个词生成附注
-    const noteCount = Math.min(words.length, Math.floor(Math.random() * 3) + 2)
-    const selectedWords = []
-
-    // 随机选择不重复的词
-    while (selectedWords.length < noteCount && selectedWords.length < words.length) {
-      const randomWord = words[Math.floor(Math.random() * words.length)]
-      if (!selectedWords.includes(randomWord)) {
-        selectedWords.push(randomWord)
-      }
-    }
-
-    // 生成附注
-    selectedWords.forEach(word => {
-      notes.push({
-        id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        text: `【${word}】的注释说明`,
-        timestamp: Date.now()
-      })
+    console.log('IPC: 翻译服务返回', {
+      translation: result.translation?.substring(0, 50),
+      notesCount: result.notes?.length,
+      language: result.language
     })
 
-    console.log('IPC: 翻译完成（Mock）', {
-      translatedLength: translatedText.length,
+    // 转换notes格式：从 {item, content} 转为 {id, text, timestamp}
+    const notes = (result.notes || []).map(note => ({
+      id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      text: `【${note.item}】${note.content}`,
+      timestamp: Date.now()
+    }))
+
+    console.log('IPC: 翻译完成', {
+      translatedLength: result.translation?.length,
       notesCount: notes.length
     })
 
     return {
       success: true,
       data: {
-        translatedText,
+        translatedText: result.translation,
         notes
       }
     }
@@ -488,6 +472,39 @@ ipcMain.handle('segments:clearChapter', async (event, projectId, chapterId) => {
     return { success: true, deletedCount }
   } catch (error) {
     console.error('IPC清空章节分段失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// IPC 处理：获取翻译配置
+ipcMain.handle('translation:getConfig', async (event) => {
+  try {
+    console.log('IPC translation:getConfig 收到请求')
+
+    const config = translationService.getConfig()
+
+    console.log('IPC: 返回翻译配置')
+
+    return { success: true, data: config }
+  } catch (error) {
+    console.error('IPC获取翻译配置失败:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+// IPC 处理：保存翻译配置
+ipcMain.handle('translation:saveConfig', async (event, config) => {
+  try {
+    console.log('IPC translation:saveConfig 收到请求', config)
+
+    // 目前暂时不实现配置保存功能，只返回成功
+    // 后续可以添加将配置写入文件的逻辑
+
+    console.log('IPC: 配置保存成功（暂不持久化）')
+
+    return { success: true }
+  } catch (error) {
+    console.error('IPC保存翻译配置失败:', error)
     return { success: false, error: error.message }
   }
 })

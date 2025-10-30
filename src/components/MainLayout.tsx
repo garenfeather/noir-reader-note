@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Layout, Button, Space, message, Modal } from 'antd'
-import { FileTextOutlined, CloseOutlined } from '@ant-design/icons'
+import { FileTextOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons'
 import ProjectList, { ProjectListItem } from './ProjectList'
 import TableOfContents from './TableOfContents'
 import ContentViewer from './ContentViewer'
 import TranslationPanel from './TranslationPanel'
+import TranslationSettingsModal from './TranslationSettingsModal'
 import { useBookStore } from '../store/bookStore'
 import { useProjectStore } from '../store/projectStore'
 import { useSegmentStore } from '../store/segmentStore'
@@ -14,6 +15,7 @@ const { Header, Content } = Layout
 function MainLayout() {
   // 移除 mode 状态，右侧面板始终显示，编辑/只读通过 isEditMode 控制
   const [showTranslationPanel, setShowTranslationPanel] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [epubData, setEpubData] = useState<ArrayBuffer | null>(null)
   const [epubPath, setEpubPath] = useState<string>('')
   const [currentChapterId, setCurrentChapterId] = useState<string>('')
@@ -400,6 +402,12 @@ function MainLayout() {
         <div className="text-lg font-semibold">{displayTitle}</div>
 
         <Space>
+          <Button
+            icon={<SettingOutlined />}
+            onClick={() => setShowSettingsModal(true)}
+          >
+            翻译设置
+          </Button>
           <Button onClick={handleOpenFile}>打开</Button>
           <Button onClick={handleCloseFile} disabled={!epubData}>
             关闭
@@ -444,6 +452,12 @@ function MainLayout() {
           )}
         </Content>
       </Layout>
+
+      {/* 翻译设置模态框 */}
+      <TranslationSettingsModal
+        open={showSettingsModal}
+        onCancel={() => setShowSettingsModal(false)}
+      />
     </Layout>
   )
 }

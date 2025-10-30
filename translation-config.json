@@ -1,0 +1,23 @@
+{
+  "intensities": {
+    "detailed": {
+      "name": "详细",
+      "promptFile": "translation/claude-translation-prompt.md"
+    },
+    "basic": {
+      "name": "基础",
+      "promptFile": "translation/claude-translation-prompt.md"
+    }
+  },
+  "sources": {
+    "gemini": {
+      "name": "Gemini",
+      "model": "gemini-2.5-flash",
+      "apiKeyEnv": "GOOGLE_API_KEY"
+    }
+  },
+  "default": {
+    "intensity": "detailed",
+    "source": "gemini"
+  }
+}
