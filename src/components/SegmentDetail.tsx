@@ -3,7 +3,7 @@
  * 显示段落的完整信息（第一次点击时从XHTML读取并缓存）
  */
 
-import { Button, Spin, Modal, message, Card } from 'antd'
+import { Button, Spin, Modal, message } from 'antd'
 import { ArrowLeftOutlined, TranslationOutlined, PlusOutlined, ClearOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Segment, Note } from '../types/segment'
@@ -204,16 +204,19 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
 
         {/* 原文内容 - 可点击跳转 */}
         {text && (
-          <Card
-            title={`原文${text.length > 0 ? `（字符数 ${text.length}）` : ''}`}
-            size="small"
-            className="bg-gray-50 cursor-pointer transition-all hover:border-blue-500 hover:shadow-md mb-4"
-            onClick={handleOriginalTextClick}
-          >
-            <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="text-sm font-semibold text-gray-700">
+                原文{text.length > 0 ? `（字符数 ${text.length}）` : ''}
+              </h4>
+            </div>
+            <div
+              className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap p-3 bg-gray-50 rounded border border-gray-200 cursor-pointer transition-all hover:border-blue-500 hover:shadow-md"
+              onClick={handleOriginalTextClick}
+            >
               {text}
             </div>
-          </Card>
+          </div>
         )}
       </div>
 

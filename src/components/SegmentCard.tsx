@@ -57,9 +57,15 @@ function SegmentCard({ segment, index, isHovered, onMouseEnter, onMouseLeave, on
 
       <div className="flex flex-col gap-1" style={{ minHeight: '2.5rem' }}>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500 font-medium">
-            段落 {index + 1}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {/* 菱形标识 - 有译文或附注时显示 */}
+            {(segment.translatedText || (segment.notes && segment.notes.length > 0)) && (
+              <span className="flex-shrink-0 inline-block w-1.5 h-1.5 bg-blue-500 transform rotate-45 rounded-[1px]" />
+            )}
+            <span className="text-xs text-gray-500 font-medium">
+              段落 {index + 1}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             {segment.textLength !== undefined && (
               <span className="text-xs text-gray-400">
