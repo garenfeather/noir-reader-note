@@ -36,8 +36,9 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
 
   // 处理原文点击跳转
   const handleOriginalTextClick = async () => {
-    if (segment.cfiRange) {
-      await jumpToCfi(segment.cfiRange)
+    const primaryCfi = segment.cfiRanges?.[0]
+    if (primaryCfi) {
+      await jumpToCfi(primaryCfi)
     } else {
       message.warning('该段落缺少定位信息')
     }
@@ -67,7 +68,8 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
         const result = await window.electronAPI.getSegmentText(
           currentProject.id,
           segment.chapterHref,
-          segment.xpath
+          segment.xpath,
+          segment.endXPath || null
         )
 
         console.log('SegmentDetail: 文本已加载', {

@@ -26,8 +26,9 @@ function BookmarkDetail({ bookmark, onBack }: Props) {
 
   // 处理原文点击跳转
   const handleOriginalTextClick = async () => {
-    if (segment.cfiRange) {
-      await jumpToCfi(segment.cfiRange)
+    const primaryCfi = segment.cfiRanges?.[0]
+    if (primaryCfi) {
+      await jumpToCfi(primaryCfi)
     } else {
       message.warning('该书签缺少定位信息')
     }
@@ -52,7 +53,8 @@ function BookmarkDetail({ bookmark, onBack }: Props) {
         const result = await window.electronAPI.getSegmentText(
           currentProject.id,
           segment.chapterHref,
-          segment.xpath
+          segment.xpath,
+          segment.endXPath || null
         )
 
         if (result.success && result.data?.text) {

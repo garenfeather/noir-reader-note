@@ -127,56 +127,63 @@ function isValidCFI(cfi: string | null | undefined): boolean {
  */
 export function applyHoverHighlight(
   rendition: Rendition | null,
-  cfiRange: string | null | undefined,
+  cfiRanges: string[] | null | undefined,
   xpath?: string
-): string | null {
+): string[] {
   if (!rendition) {
     console.warn('applyHoverHighlight: rendition 为 null')
-    return null
-  }
-
-  // 检查 CFI 是否有效
-  let actualCFI: string | null = null
-
-  if (isValidCFI(cfiRange)) {
-    actualCFI = cfiRange!
-  } else if (cfiRange && xpath) {
-    // CFI 无效或不存在，从 XPath 生成
-    if (cfiRange) {
-      console.log('⚠️ 数据库中的 CFI 无效，从 XPath 重新生成:', cfiRange)
-    }
-    actualCFI = generateCFIFromXPath(xpath, rendition)
-  } else if (!cfiRange) {
-    console.debug('applyHoverHighlight: 缺少 CFI，跳过阅读区域高亮')
-    return null
-  }
-
-  if (!actualCFI) {
-    console.warn('applyHoverHighlight: 无法获取有效的 CFI', { cfiRange, xpath })
-    return null
+    return []
   }
 
   const annotations = getAnnotations(rendition)
-  if (!annotations) return null
+  if (!annotations) return []
 
-  try {
-    // 先移除可能存在的旧高亮
-    annotations.remove(actualCFI, 'highlight')
+  const candidates = Array.isArray(cfiRanges)
+    ? cfiRanges.filter((cfi): cfi is string => typeof cfi === 'string' && cfi.trim().length > 0)
+    : []
 
-    // 添加新高亮，传递明确的样式
-    const mark = annotations.highlight(actualCFI, {}, (e: any) => {
-      console.log('高亮被点击:', e)
-    }, 'epubjs-hl', {
-      'fill': 'yellow',
-      'fill-opacity': '0.3'
-    })
-
-    console.log('✅ 悬停高亮已应用:', actualCFI, '返回值:', mark)
-    return actualCFI
-  } catch (error) {
-    console.error('❌ 悬停高亮失败:', actualCFI, error)
-    return null
+  if (candidates.length === 0 && xpath) {
+    const generated = generateCFIFromXPath(xpath, rendition)
+    if (generated) {
+      candidates.push(generated)
+    }
   }
+
+  const applied: string[] = []
+
+  candidates.forEach((candidate) => {
+    if (!isValidCFI(candidate)) {
+      console.warn('applyHoverHighlight: 跳过无效的 CFI', candidate)
+      return
+    }
+
+    try {
+      annotations.remove(candidate, 'highlight')
+      annotations.highlight(
+        candidate,
+        {},
+        (e: any) => {
+          console.log('高亮被点击:', e)
+        },
+        'epubjs-hl',
+        {
+          'fill': 'yellow',
+          'fill-opacity': '0.3'
+        }
+      )
+      applied.push(candidate)
+    } catch (error) {
+      console.error('❌ 悬停高亮失败:', candidate, error)
+    }
+  })
+
+  if (applied.length === 0) {
+    console.debug('applyHoverHighlight: 未能应用任何高亮', { candidates, xpath })
+  } else {
+    console.log('✅ 悬停高亮已应用:', applied)
+  }
+
+  return applied
 }
 
 /**
@@ -184,29 +191,34 @@ export function applyHoverHighlight(
  */
 export function removeHighlight(
   rendition: Rendition | null,
-  cfiRange: string | null | undefined
+  cfis: string[] | string | null | undefined
 ): void {
-  if (!rendition || !cfiRange) return
+  if (!rendition || !cfis) return
 
   const annotations = getAnnotations(rendition)
   if (!annotations) return
 
-  try {
-    annotations.remove(cfiRange, 'highlight')
-    console.log('✅ 高亮已移除:', cfiRange)
-  } catch (error) {
-    console.warn('removeHighlight: 移除失败', cfiRange, error)
-  }
+  const targets = Array.isArray(cfis) ? cfis : [cfis]
+
+  targets.forEach((cfi) => {
+    if (!cfi) return
+    try {
+      annotations.remove(cfi, 'highlight')
+      console.log('✅ 高亮已移除:', cfi)
+    } catch (error) {
+      console.warn('removeHighlight: 移除失败', cfi, error)
+    }
+  })
 }
 
 /**
  * 闪烁高亮: 添加高亮后自动在持续时间后移除
  * 返回清理函数,可在高亮完成前手动取消
- * 优先使用 cfiRange，如果无效则从 xpath 动态生成
+ * 优先使用已存储的 CFI，如果缺失则尝试从 XPath 动态生成
  */
 export function flashHighlight(
   rendition: Rendition | null,
-  cfiRange: string | null | undefined,
+  cfiRanges: string[] | null | undefined,
   duration = FLASH_HIGHLIGHT_DURATION,
   xpath?: string
 ): () => void {
@@ -215,29 +227,32 @@ export function flashHighlight(
     return () => {}
   }
 
-  // 检查 CFI 是否有效
-  let actualCFI: string | null = null
-
-  if (isValidCFI(cfiRange)) {
-    actualCFI = cfiRange!
-  } else if (cfiRange && xpath) {
-    // CFI 无效或不存在，从 XPath 生成
-    if (cfiRange) {
-      console.log('⚠️ 数据库中的 CFI 无效，从 XPath 重新生成 (闪烁):', cfiRange)
-    }
-    actualCFI = generateCFIFromXPath(xpath, rendition)
-  } else if (!cfiRange) {
-    console.debug('flashHighlight: 缺少 CFI，跳过闪烁高亮')
-    return () => {}
-  }
-
-  if (!actualCFI) {
-    console.warn('flashHighlight: 无法获取有效的 CFI', { cfiRange, xpath })
-    return () => {}
-  }
-
   const annotations = getAnnotations(rendition)
   if (!annotations) {
+    return () => {}
+  }
+
+  const candidates = Array.isArray(cfiRanges)
+    ? cfiRanges.filter((cfi): cfi is string => typeof cfi === 'string' && cfi.trim().length > 0)
+    : []
+
+  if (candidates.length === 0 && xpath) {
+    const generated = generateCFIFromXPath(xpath, rendition)
+    if (generated) {
+      candidates.push(generated)
+    }
+  }
+
+  const validCFIs = candidates.filter((cfi) => {
+    if (!isValidCFI(cfi)) {
+      console.warn('flashHighlight: 跳过无效的 CFI', cfi)
+      return false
+    }
+    return true
+  })
+
+  if (validCFIs.length === 0) {
+    console.debug('flashHighlight: 无可用 CFI，跳过闪烁高亮', { candidates, xpath })
     return () => {}
   }
 
@@ -248,24 +263,30 @@ export function flashHighlight(
       clearTimeout(timeoutId)
       timeoutId = undefined
     }
-    removeHighlight(rendition, actualCFI)
+    removeHighlight(rendition, validCFIs)
   }
 
   try {
-    // 先移除可能存在的旧高亮
-    annotations.remove(actualCFI, 'highlight')
+    validCFIs.forEach((cfi) => {
+      try {
+        annotations.remove(cfi, 'highlight')
+      } catch (error) {
+        console.warn('flashHighlight: 移除旧高亮失败', cfi, error)
+      }
+    })
 
-    // 添加闪烁高亮,使用主题样式
-    annotations.highlight(actualCFI, {}, undefined)
+    validCFIs.forEach((cfi) => {
+      annotations.highlight(cfi, {}, undefined)
+    })
 
     // 设置自动移除
     timeoutId = setTimeout(() => {
       cleanup()
     }, duration)
 
-    console.log('✅ 闪烁高亮已应用,将在', duration, 'ms 后移除')
+    console.log('✅ 闪烁高亮已应用,将在', duration, 'ms 后移除', validCFIs)
   } catch (error) {
-    console.error('❌ 闪烁高亮失败:', actualCFI, error)
+    console.error('❌ 闪烁高亮失败:', validCFIs, error)
   }
 
   return cleanup
@@ -333,3 +354,11 @@ export function findElementInRendition(
     return null
   }
 }
+
+/**
+ * 从已有的CFI生成合并后的CFI Range
+ * 通过解析第一个和最后一个段落的CFI，组合成新的Range CFI
+ * @param firstSegmentCFI - 第一个段落的CFI Range
+ * @param lastSegmentCFI - 最后一个段落的CFI Range
+ * @returns 合并后的CFI Range 字符串或 null
+ */

@@ -69,7 +69,7 @@ class SegmentService {
           chapterId: chapterId,
           chapterHref: chapterHref,
           xpath: para.xpath,
-          cfiRange: null,  // CFI将在渲染进程中生成
+          cfiRanges: [],   // CFI将在渲染进程中生成（前端生成并回写）
           position: index,
           isEmpty: para.isEmpty,
           parentSegmentId: null,
@@ -246,9 +246,10 @@ class SegmentService {
    * 通过XPath从xhtml文件获取文本
    * @param {string} xhtmlPath - xhtml文件路径
    * @param {string} xpath - 目标元素的XPath
+   * @param {string} endXPath - 可选的结束XPath（合并段落时使用）
    * @returns {string} 元素的文本内容
    */
-  getSegmentTextByXPath(xhtmlPath, xpath) {
+  getSegmentTextByXPath(xhtmlPath, xpath, endXPath = null) {
     try {
       if (!xpath) {
         throw new Error('缺少XPath参数')
@@ -265,30 +266,91 @@ class SegmentService {
 
       const document = dom.window.document
 
-      let element = null
+      // 如果没有 endXPath，使用原有逻辑提取单个段落
+      if (!endXPath) {
+        let element = null
 
-      // 优先处理根据ID生成的XPath（性能更好）
-      const idMatch = xpath.match(/^\/\/\*\[@id="(.+)"\]$/)
-      if (idMatch) {
-        element = document.getElementById(idMatch[1])
+        // 优先处理根据ID生成的XPath（性能更好）
+        const idMatch = xpath.match(/^\/\/\*\[@id="(.+)"\]$/)
+        if (idMatch) {
+          element = document.getElementById(idMatch[1])
+        }
+
+        if (!element) {
+          element = this.getElementByXPath(document, xpath)
+        }
+
+        if (!element) {
+          console.warn('SegmentService: XPath未匹配到元素', { xpath, xhtmlPath })
+          return ''
+        }
+
+        const text = this.getTextContent(element).trim()
+        return text
       }
 
-      if (!element) {
-        element = this.getElementByXPath(document, xpath)
-      }
-
-      if (!element) {
-        console.warn('SegmentService: XPath未匹配到元素', { xpath, xhtmlPath })
-        return ''
-      }
-
-      const text = this.getTextContent(element).trim()
-
-      return text
+      // 有 endXPath，提取范围内的所有段落文本
+      return this.getRangeTextByXPath(document, xpath, endXPath)
     } catch (error) {
       console.error('SegmentService: 通过XPath获取文本失败', error)
       throw error
     }
+  }
+
+  /**
+   * 提取从 startXPath 到 endXPath 范围内的所有段落文本
+   * @param {Document} document - JSDOM document
+   * @param {string} startXPath - 起始XPath
+   * @param {string} endXPath - 结束XPath
+   * @returns {string} 合并后的文本，用换行符连接
+   */
+  getRangeTextByXPath(document, startXPath, endXPath) {
+    // 找到起始和结束元素
+    const startElement = this.getElementByXPath(document, startXPath)
+    const endElement = this.getElementByXPath(document, endXPath)
+
+    if (!startElement || !endElement) {
+      console.warn('SegmentService: 范围XPath未匹配到元素', { startXPath, endXPath })
+      return ''
+    }
+
+    // 收集范围内的所有段落元素
+    const elements = []
+    let currentElement = startElement
+
+    // 从起始元素遍历到结束元素
+    while (currentElement) {
+      // 检查当前元素是否是段落标签
+      if (PARAGRAPH_TAGS.includes(currentElement.tagName.toLowerCase())) {
+        elements.push(currentElement)
+      }
+
+      // 如果到达结束元素，停止
+      if (currentElement === endElement) {
+        break
+      }
+
+      // 移动到下一个元素（深度优先遍历）
+      if (currentElement.nextElementSibling) {
+        currentElement = currentElement.nextElementSibling
+      } else {
+        // 没有兄弟节点，向上查找父节点的下一个兄弟
+        let parent = currentElement.parentElement
+        while (parent && !parent.nextElementSibling) {
+          parent = parent.parentElement
+        }
+        if (parent && parent.nextElementSibling) {
+          currentElement = parent.nextElementSibling
+        } else {
+          // 已遍历完整个文档树
+          break
+        }
+      }
+    }
+
+    // 提取每个元素的文本并用换行符连接
+    const texts = elements.map(el => this.getTextContent(el).trim()).filter(text => text.length > 0)
+    return texts.join('\n')
   }
 
   /**

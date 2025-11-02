@@ -43,8 +43,21 @@ interface SegmentState {
   // 待删除的分段ID列表（点击保存时才真正删除）
   deletedSegmentIds: string[]
 
+  // 待合并的段落列表（点击保存时才真正合并）
+  pendingMerges: Array<{
+    targetId: string      // 合并到的目标段落ID
+    sourceIds: string[]   // 被合并的源段落IDs
+    endXPath: string      // 结束段落的XPath
+    mergedCfiRanges: string[] // 合并后的CFI列表
+    textLength: number    // 合并后的文本长度
+  }>
+
   // 附注列表滚动位置
   segmentScrollTop: number
+
+  // 多选模式相关
+  isMultiSelectMode: boolean
+  selectedSegmentIds: Set<string>
 
   // Actions
   setSegments: (segments: Segment[]) => void
@@ -60,9 +73,19 @@ interface SegmentState {
   addChapterWithSegments: (chapterHref: string) => void
   removeChapterWithSegments: (chapterHref: string) => void
   markSegmentDeleted: (segmentId: string) => void
+  addPendingMerge: (merge: {
+    targetId: string
+    sourceIds: string[]
+    endXPath: string
+    mergedCfiRanges: string[]
+    textLength: number
+  }) => void
   clearSegments: () => void
   clearModifiedFlags: () => void
   saveScrollPosition: (scrollTop: number) => void
+  setMultiSelectMode: (enabled: boolean) => void
+  toggleSegmentSelection: (segmentId: string) => void
+  clearSelection: () => void
 }
 
 export const useSegmentStore = create<SegmentState>((set, get) => ({
@@ -78,7 +101,10 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
   isEditMode: false,
   editSource: null,
   deletedSegmentIds: [],
+  pendingMerges: [],
   segmentScrollTop: 0,
+  isMultiSelectMode: false,
+  selectedSegmentIds: new Set<string>(),
 
   setSegments: (segments) => {
     const visibleSegments = segments.filter(s => !s.isEmpty)
@@ -145,6 +171,32 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
     set({ segments, visibleSegments, deletedSegmentIds })
   },
 
+  addPendingMerge: (merge) => {
+    const { targetId, sourceIds, endXPath, mergedCfiRanges, textLength } = merge
+
+    // 更新目标段落：标记为已修改，更新 endXPath、完整合并CFI 和 textLength
+    const segments = get().segments.map(s => {
+      if (s.id === targetId) {
+        return {
+          ...s,
+          endXPath,
+          cfiRanges: mergedCfiRanges,
+          textLength,
+          isModified: true
+        }
+      }
+      return s
+    })
+
+    // 从列表中隐藏被合并的源段落
+    const visibleSegments = segments.filter(s => !s.isEmpty && !sourceIds.includes(s.id))
+
+    // 添加到待合并列表
+    const pendingMerges = [...get().pendingMerges, merge]
+
+    set({ segments, visibleSegments, pendingMerges })
+  },
+
   clearSegments: () =>
     set({
       segments: [],
@@ -156,16 +208,39 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
       isParsed: false,
       isEditMode: false,
       editSource: null,
-      deletedSegmentIds: []
+      deletedSegmentIds: [],
+      pendingMerges: []
     }),
 
   clearModifiedFlags: () => {
     const segments = get().segments.map(s => ({ ...s, isModified: false }))
     const visibleSegments = segments.filter(s => !s.isEmpty)
-    set({ segments, visibleSegments, deletedSegmentIds: [] })
+    set({ segments, visibleSegments, deletedSegmentIds: [], pendingMerges: [] })
   },
 
   saveScrollPosition: (scrollTop: number) => {
     set({ segmentScrollTop: scrollTop })
+  },
+
+  setMultiSelectMode: (enabled: boolean) => {
+    if (!enabled) {
+      set({ isMultiSelectMode: false, selectedSegmentIds: new Set() })
+    } else {
+      set({ isMultiSelectMode: true })
+    }
+  },
+
+  toggleSegmentSelection: (segmentId: string) => {
+    const selected = new Set(get().selectedSegmentIds)
+    if (selected.has(segmentId)) {
+      selected.delete(segmentId)
+    } else {
+      selected.add(segmentId)
+    }
+    set({ selectedSegmentIds: selected })
+  },
+
+  clearSelection: () => {
+    set({ selectedSegmentIds: new Set() })
   }
 }))

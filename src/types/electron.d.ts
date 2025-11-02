@@ -41,8 +41,9 @@ export interface ElectronAPI {
   getSegmentText: (
     projectId: string,
     chapterHref: string,
-    xpath: string
-  ) => Promise<{ success: boolean; data?: { text: string }; error?: string }>
+    xpath: string,
+    endXPath?: string | null
+  ) => Promise<{ success: boolean; data?: { text: string; fromCache?: boolean }; error?: string }>
 
   translateSegment: (
     originalText: string
@@ -62,6 +63,14 @@ export interface ElectronAPI {
     projectId: string,
     chapterId: string
   ) => Promise<{ success: boolean; deletedCount?: number; error?: string }>
+
+  mergeSegments: (
+    targetId: string,
+    sourceIds: string[],
+    endXPath: string,
+    cfiRanges: string[],
+    textLength: number
+  ) => Promise<{ success: boolean; data?: Segment; error?: string }>
 }
 
 declare global {

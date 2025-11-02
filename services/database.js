@@ -16,6 +16,25 @@ class DatabaseService {
   }
 
   /**
+   * 将数据库中的 CFI JSON 字符串解析为数组
+   * @param {string|null} value - 数据库存储的 JSON 字符串
+   * @returns {string[]} 解析后的 CFI 列表
+   */
+  parseCfiArray(value) {
+    if (!value) return []
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value
+      if (Array.isArray(parsed)) {
+        return parsed.filter((cfi) => typeof cfi === 'string' && cfi.trim().length > 0)
+      }
+      return []
+    } catch (error) {
+      console.warn('解析 CFI 列表失败，返回空数组:', { value, error: error.message })
+      return []
+    }
+  }
+
+  /**
    * 初始化全局数据库（应用启动时调用）
    * 创建项目表和分段表
    */
@@ -62,6 +81,7 @@ class DatabaseService {
         chapter_id TEXT NOT NULL,
         chapter_href TEXT NOT NULL,
         xpath TEXT NOT NULL,
+        end_xpath TEXT,
         cfi_range TEXT,
         position REAL NOT NULL,
         is_empty BOOLEAN DEFAULT 0,
@@ -75,6 +95,17 @@ class DatabaseService {
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )
     `)
+
+    // 为已有数据库添加 end_xpath 字段（如果不存在）
+    try {
+      this.db.exec(`ALTER TABLE segments ADD COLUMN end_xpath TEXT`)
+      console.log('已添加 end_xpath 字段')
+    } catch (error) {
+      // 字段已存在，忽略错误
+      if (!error.message.includes('duplicate column')) {
+        console.error('添加 end_xpath 字段失败:', error)
+      }
+    }
 
     // 创建索引
     this.db.exec(`
@@ -239,15 +270,19 @@ class DatabaseService {
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO segments
-      (id, project_id, chapter_id, chapter_href, xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length, translated_text, notes, is_modified)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, project_id, chapter_id, chapter_href, xpath, end_xpath, cfi_range, position, is_empty, parent_segment_id, preview, text_length, translated_text, notes, is_modified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     // 使用事务确保数据一致性
     const transaction = this.db.transaction((segments) => {
       for (const segment of segments) {
-        // 将 notes 数组转换为 JSON 字符串
+        // 将 notes、CFI 数组转换为 JSON 字符串
         const notesJSON = segment.notes ? JSON.stringify(segment.notes) : null
+        const cfiRanges = Array.isArray(segment.cfiRanges)
+          ? segment.cfiRanges.filter((cfi) => typeof cfi === 'string' && cfi.trim().length > 0)
+          : []
+        const cfiJSON = JSON.stringify(cfiRanges)
 
         stmt.run(
           segment.id,
@@ -255,7 +290,8 @@ class DatabaseService {
           segment.chapterId,
           segment.chapterHref,
           segment.xpath,
-          segment.cfiRange || null,
+          segment.endXPath || null,
+          cfiJSON,
           segment.position,
           segment.isEmpty ? 1 : 0,
           segment.parentSegmentId || null,
@@ -474,23 +510,23 @@ class DatabaseService {
                 const cfiRange = segmentService.generateCFI(element, cfiBase)
 
                 if (cfiRange) {
-                  segment.cfiRange = cfiRange
+                  segment.cfiRanges = [cfiRange]
                   successCount++
                   chapterSuccessCount++
                 } else {
-                  segment.cfiRange = null
+                  segment.cfiRanges = []
                   failCount++
                   chapterFailCount++
                 }
               } else {
                 console.error(`  ❌ 未找到元素: ${segment.xpath}`)
-                segment.cfiRange = null
+                segment.cfiRanges = []
                 failCount++
                 chapterFailCount++
               }
             } catch (error) {
               console.error(`  ❌ 生成CFI异常:`, error.message)
-              segment.cfiRange = null
+              segment.cfiRanges = []
               failCount++
               chapterFailCount++
             }
@@ -522,7 +558,7 @@ class DatabaseService {
    */
   loadSegments(projectId, chapterId) {
     const stmt = this.db.prepare(`
-      SELECT id, project_id, chapter_id, chapter_href, xpath, cfi_range, position,
+      SELECT id, project_id, chapter_id, chapter_href, xpath, end_xpath, cfi_range, position,
              is_empty, parent_segment_id, preview, text_length, created_at,
              translated_text, notes, is_modified
       FROM segments
@@ -539,7 +575,8 @@ class DatabaseService {
         chapterId: row.chapter_id,
         chapterHref: row.chapter_href,
         xpath: row.xpath,
-        cfiRange: row.cfi_range,
+        endXPath: row.end_xpath,
+        cfiRanges: this.parseCfiArray(row.cfi_range),
         position: row.position,
         isEmpty: row.is_empty === 1,
         parentSegmentId: row.parent_segment_id,
@@ -736,7 +773,8 @@ class DatabaseService {
           chapterId: row.chapter_id,
           chapterHref: row.chapter_href,
           xpath: row.xpath,
-          cfiRange: row.cfi_range,
+          endXPath: row.end_xpath,
+          cfiRanges: this.parseCfiArray(row.cfi_range),
           position: row.position,
           isEmpty: row.is_empty === 1,
           parentSegmentId: row.parent_segment_id,
@@ -770,6 +808,107 @@ class DatabaseService {
     } catch (error) {
       console.error('检查书签状态失败:', error)
       return false
+    }
+  }
+
+  /**
+   * 合并多个段落
+   * @param {string} targetId - 目标段落ID（保留的第一个段落）
+   * @param {string[]} sourceIds - 源段落ID列表（将被删除的段落）
+   * @param {string} endXPath - 合并后的结束XPath
+   * @param {string[]} cfiRanges - 合并后的CFI列表
+   * @param {number} textLength - 合并后的文本长度
+   * @returns {Object} 更新后的段落数据
+   */
+  mergeSegments(targetId, sourceIds, endXPath, cfiRanges, textLength) {
+    console.log('开始合并段落:', { targetId, sourceIds, endXPath, textLength, cfiCount: Array.isArray(cfiRanges) ? cfiRanges.length : 0 })
+
+    // 使用事务确保原子性
+    const merge = this.db.transaction(() => {
+      // 1. 验证目标段落存在
+      const getTargetStmt = this.db.prepare(`
+        SELECT * FROM segments WHERE id = ?
+      `)
+      const targetSegment = getTargetStmt.get(targetId)
+      if (!targetSegment) {
+        throw new Error(`目标段落不存在: ${targetId}`)
+      }
+
+      // 2. 验证所有源段落存在且满足条件（无译文、无附注）
+      const getSourceStmt = this.db.prepare(`
+        SELECT id, translated_text, notes FROM segments WHERE id = ?
+      `)
+      for (const sourceId of sourceIds) {
+        const sourceSegment = getSourceStmt.get(sourceId)
+        if (!sourceSegment) {
+          throw new Error(`源段落不存在: ${sourceId}`)
+        }
+        if (sourceSegment.translated_text || sourceSegment.notes) {
+          throw new Error(`段落 ${sourceId} 有译文或附注，不能合并`)
+        }
+      }
+
+      // 3. 删除源段落的书签（级联删除会自动处理）
+      const deleteBookmarkStmt = this.db.prepare(`
+        DELETE FROM bookmarks WHERE segment_id = ?
+      `)
+      for (const sourceId of sourceIds) {
+        deleteBookmarkStmt.run(sourceId)
+      }
+
+      // 4. 更新目标段落
+      const updateTargetStmt = this.db.prepare(`
+        UPDATE segments
+        SET end_xpath = ?,
+            cfi_range = ?,
+            text_length = ?
+        WHERE id = ?
+      `)
+      const cfiJSON = JSON.stringify(Array.isArray(cfiRanges)
+        ? cfiRanges.filter((cfi) => typeof cfi === 'string' && cfi.trim().length > 0)
+        : [])
+
+      updateTargetStmt.run(endXPath, cfiJSON, textLength, targetId)
+
+      // 5. 删除源段落
+      const deleteSegmentStmt = this.db.prepare(`
+        DELETE FROM segments WHERE id = ?
+      `)
+      for (const sourceId of sourceIds) {
+        deleteSegmentStmt.run(sourceId)
+      }
+
+      // 6. 获取更新后的段落数据
+      const updatedSegment = getTargetStmt.get(targetId)
+      return updatedSegment
+    })
+
+    try {
+      const result = merge()
+      console.log('段落合并成功:', targetId)
+
+      // 转换为前端格式
+      return {
+        id: result.id,
+        projectId: result.project_id,
+        chapterId: result.chapter_id,
+        chapterHref: result.chapter_href,
+        xpath: result.xpath,
+        endXPath: result.end_xpath,
+        cfiRanges: this.parseCfiArray(result.cfi_range),
+        position: result.position,
+        isEmpty: result.is_empty === 1,
+        parentSegmentId: result.parent_segment_id,
+        preview: result.preview,
+        textLength: result.text_length,
+        createdAt: result.created_at,
+        translatedText: result.translated_text,
+        notes: result.notes ? JSON.parse(result.notes) : null,
+        isModified: result.is_modified === 1
+      }
+    } catch (error) {
+      console.error('合并段落失败:', error)
+      throw error
     }
   }
 

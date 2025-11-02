@@ -8,7 +8,8 @@
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -16,7 +17,7 @@
     "antd": "^5.12.0",
     "axios": "^1.13.1",
     "better-sqlite3": "^12.4.1",
-    "epubjs": "^0.3.93",
+    "epubjs": "github:futurepress/epub.js#master",
     "jsdom": "24.1.3",
     "proxy-agent": "^6.5.0",
     "react": "^18.2.0",

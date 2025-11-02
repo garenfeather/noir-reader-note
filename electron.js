@@ -257,7 +257,8 @@ ipcMain.handle('segments:load', async (event, projectId, chapterId) => {
     const segments = dbService.loadSegments(projectId, chapterId)
     console.log(`📥 IPC: 加载了 ${segments.length} 个分段`)
     if (segments.length > 0) {
-      console.log('📥 IPC: 第一个分段的 CFI:', segments[0].cfiRange?.substring(0, 50))
+      const firstCfi = segments[0].cfiRanges?.[0]
+      console.log('📥 IPC: 第一个分段的 CFI:', firstCfi ? firstCfi.substring(0, 50) : null)
     }
     return { success: true, data: segments }
   } catch (error) {
@@ -316,9 +317,9 @@ ipcMain.handle('segments:parse', async (event, projectId, chapterId, chapterHref
 })
 
 // IPC 处理：通过xpath获取分段文本
-ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, xpath) => {
+ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, xpath, endXPath = null) => {
   try {
-    console.log('IPC segments:getSegmentText 收到请求', { projectId, chapterHref, xpath })
+    console.log('IPC segments:getSegmentText 收到请求', { projectId, chapterHref, xpath, endXPath })
 
     const projectInfo = projectService.getProject(projectId)
     if (!projectInfo) {
@@ -328,14 +329,19 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
     // 初始化该项目的缓存数据库（如果未初始化）
     cacheService.initializeProjectCache(projectInfo.project.projectPath, projectId)
 
-    // 第一步：尝试从缓存读取
-    const cachedText = cacheService.getSegmentTextFromCache(projectId, chapterHref, xpath)
-    if (cachedText) {
-      console.log('IPC: 从缓存返回文本', { length: cachedText.length })
-      return { success: true, data: { text: cachedText, fromCache: true } }
+    // 如果是合并段落（有 endXPath），跳过缓存直接读取文件
+    const useCache = !endXPath
+
+    // 第一步：尝试从缓存读取（仅普通段落）
+    if (useCache) {
+      const cachedText = cacheService.getSegmentTextFromCache(projectId, chapterHref, xpath)
+      if (cachedText) {
+        console.log('IPC: 从缓存返回文本', { length: cachedText.length })
+        return { success: true, data: { text: cachedText, fromCache: true } }
+      }
     }
 
-    // 第二步：缓存未命中，从文件读取
+    // 第二步：缓存未命中或合并段落，从文件读取
     const extractedPath = path.join(projectInfo.project.projectPath, 'extracted')
     const opfPath = projectService.findOPFFile(extractedPath)
     if (!opfPath) {
@@ -347,15 +353,17 @@ ipcMain.handle('segments:getSegmentText', async (event, projectId, chapterHref, 
     const opfDir = path.dirname(opfPath)
     const xhtmlPath = path.join(opfDir, chapterHref)
 
-    console.log('IPC: 从文件读取文本', xhtmlPath)
+    console.log('IPC: 从文件读取文本', xhtmlPath, endXPath ? '(合并段落)' : '(普通段落)')
 
-    // 获取分段文本
-    const text = segmentService.getSegmentTextByXPath(xhtmlPath, xpath)
+    // 获取分段文本（支持 endXPath）
+    const text = segmentService.getSegmentTextByXPath(xhtmlPath, xpath, endXPath)
 
     console.log('IPC: 分段文本已获取', { length: text.length })
 
-    // 第三步：保存到缓存
-    cacheService.saveSegmentTextToCache(projectId, chapterHref, xpath, text)
+    // 第三步：保存到缓存（仅普通段落）
+    if (useCache) {
+      cacheService.saveSegmentTextToCache(projectId, chapterHref, xpath, text)
+    }
 
     return { success: true, data: { text, fromCache: false } }
   } catch (error) {
@@ -473,6 +481,29 @@ ipcMain.handle('segments:clearChapter', async (event, projectId, chapterId) => {
   } catch (error) {
     console.error('IPC清空章节分段失败:', error)
     return { success: false, error: error.message }
+  }
+})
+
+// IPC 处理：合并多个段落
+ipcMain.handle('segments:merge', async (event, targetId, sourceIds, endXPath, cfiRanges, textLength) => {
+  try {
+    console.log('IPC segments:merge 收到请求', { targetId, sourceIds, endXPath, textLength, cfiCount: Array.isArray(cfiRanges) ? cfiRanges.length : 0 })
+
+    // 调用数据库服务合并段落
+    const mergedSegment = dbService.mergeSegments(targetId, sourceIds, endXPath, cfiRanges, textLength)
+
+    console.log('IPC: 段落合并成功', targetId)
+
+    return {
+      success: true,
+      data: mergedSegment
+    }
+  } catch (error) {
+    console.error('IPC合并段落失败:', error)
+    return {
+      success: false,
+      error: error.message
+    }
   }
 })
 

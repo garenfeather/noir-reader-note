@@ -27,8 +27,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('segments:listChapters', projectId),
   parseSegments: (projectId, chapterId, chapterHref) =>
     ipcRenderer.invoke('segments:parse', projectId, chapterId, chapterHref),
-  getSegmentText: (projectId, chapterHref, xpath) =>
-    ipcRenderer.invoke('segments:getSegmentText', projectId, chapterHref, xpath),
+  getSegmentText: (projectId, chapterHref, xpath, endXPath = null) =>
+    ipcRenderer.invoke('segments:getSegmentText', projectId, chapterHref, xpath, endXPath),
   translateSegment: (originalText) =>
     ipcRenderer.invoke('segments:translate', originalText),
   saveSegmentNotes: (segmentId, translatedText, notes) =>
@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('segments:delete', segmentId),
   clearChapterSegments: (projectId, chapterId) =>
     ipcRenderer.invoke('segments:clearChapter', projectId, chapterId),
+  mergeSegments: (targetId, sourceIds, endXPath, cfiRanges, textLength) =>
+    ipcRenderer.invoke('segments:merge', targetId, sourceIds, endXPath, cfiRanges, textLength),
 
   // 翻译配置
   getTranslationConfig: () =>

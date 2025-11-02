@@ -3,9 +3,9 @@
  * 显示所有分段卡片
  */
 
-import { List, Spin, Empty, Button, Space, Modal, message } from 'antd'
+import { List, Spin, Empty, Button, Space, Modal, message, Dropdown } from 'antd'
 import { CheckOutlined, CloseOutlined, EditOutlined, ScissorOutlined, RollbackOutlined, DeleteOutlined } from '@ant-design/icons'
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useSegmentStore } from '../store/segmentStore'
 import { useBookStore } from '../store/bookStore'
 import { useProjectStore } from '../store/projectStore'
@@ -40,23 +40,32 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     editSource,
     activeChapterId,
     activeChapterHref,
+    isMultiSelectMode,
+    selectedSegmentIds,
     setHoveredSegment,
     setSelectedSegment,
     setEditMode,
     setEditSource,
     setSegments,
     markSegmentDeleted,
+    addPendingMerge,
     clearSegments,
     setParsed,
-    removeChapterWithSegments
+    removeChapterWithSegments,
+    setMultiSelectMode,
+    toggleSegmentSelection,
+    clearSelection
   } = useSegmentStore()
+
+  const [contextMenuVisible, setContextMenuVisible] = useState(false)
+  const [isMerging, setIsMerging] = useState(false)
 
   const { currentProject, setHasUnsavedChanges } = useProjectStore()
   const { rendition } = useBookStore()
   const lastRenditionRef = useRef<typeof rendition>(null)
 
-  // 记录当前悬停高亮的 CFI
-  const hoverHighlightCfi = useRef<string | null>(null)
+  // 记录当前悬停高亮的 CFI 列表
+  const hoverHighlightCfi = useRef<string[]>([])
   // 记录当前闪烁高亮的清理函数
   const flashHighlightCleanup = useRef<(() => void) | null>(null)
   // 跳转状态跟踪
@@ -77,9 +86,9 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
   const removeHoverHighlights = useCallback(() => {
     const targetRendition = rendition ?? lastRenditionRef.current
 
-    if (hoverHighlightCfi.current && targetRendition) {
+    if (hoverHighlightCfi.current.length > 0 && targetRendition) {
       removeHighlight(targetRendition, hoverHighlightCfi.current)
-      hoverHighlightCfi.current = null
+      hoverHighlightCfi.current = []
     }
   }, [rendition])
 
@@ -95,12 +104,12 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     if (hoveredSegmentId) {
       const segment = visibleSegments.find(s => s.id === hoveredSegmentId)
       if (segment) {
-        const appliedCFI = applyHoverHighlight(
+        const appliedCFIs = applyHoverHighlight(
           targetRendition,
-          segment.cfiRange,
+          segment.cfiRanges,
           segment.xpath
         )
-        hoverHighlightCfi.current = appliedCFI
+        hoverHighlightCfi.current = appliedCFIs
       }
     }
 
@@ -234,13 +243,159 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     // 闪烁高亮 (优先使用 CFI，否则从 XPath 生成)
     flashHighlightCleanup.current = flashHighlight(
       targetRendition,
-      segment.cfiRange,
+      segment.cfiRanges,
       1500, // duration
       segment.xpath
     )
   }, [rendition])
 
   // 处理卡片点击 - 使用 Ref 跟踪状态
+  // 验证合并选择
+  const validateMergeSelection = (): { valid: boolean; reason?: string } => {
+    const selectedIds = Array.from(selectedSegmentIds)
+
+    if (selectedIds.length < 2) {
+      return { valid: false, reason: '至少选择2个段落' }
+    }
+
+    const selectedSegments = visibleSegments.filter(s => selectedIds.includes(s.id))
+
+    if (selectedSegments.length < 2) {
+      return { valid: false, reason: '选中的段落数量不足' }
+    }
+
+    // 检查是否都在同一章节
+    const chapterHrefs = new Set(selectedSegments.map(s => s.chapterHref))
+    if (chapterHrefs.size > 1) {
+      return { valid: false, reason: '只能合并同一章节的段落' }
+    }
+
+    // 检查是否有译文或附注
+    const hasContent = selectedSegments.some(s => s.translatedText || (s.notes && s.notes.length > 0))
+    if (hasContent) {
+      return { valid: false, reason: '不能合并有译文或附注的段落' }
+    }
+
+    // 检查是否有空段落
+    const hasEmpty = selectedSegments.some(s => s.isEmpty)
+    if (hasEmpty) {
+      return { valid: false, reason: '不能合并空段落' }
+    }
+
+    // 检查position连续性
+    const positions = selectedSegments.map(s => s.position).sort((a, b) => a - b)
+    for (let i = 1; i < positions.length; i++) {
+      if (positions[i] - positions[i - 1] !== 1) {
+        return { valid: false, reason: '只能合并连续的段落' }
+      }
+    }
+
+    return { valid: true }
+  }
+
+  // 执行合并（延迟提交）
+  const handleMerge = async () => {
+    const validation = validateMergeSelection()
+    if (!validation.valid) {
+      message.error(validation.reason)
+      return
+    }
+
+    Modal.confirm({
+      title: '确认合并',
+      content: `确定要合并选中的 ${selectedSegmentIds.size} 个段落吗？合并后需要点击"保存"才会生效。`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'primary',
+      onOk: async () => {
+        try {
+          setIsMerging(true)
+
+          const selectedIds = Array.from(selectedSegmentIds)
+          const selectedSegments = visibleSegments
+            .filter(s => selectedIds.includes(s.id))
+            .sort((a, b) => a.position - b.position)
+
+          if (selectedSegments.length === 0) {
+            throw new Error('未找到选中的段落')
+          }
+
+          const targetSegment = selectedSegments[0]
+          const lastSegment = selectedSegments[selectedSegments.length - 1]
+          // 正确计算 sourceIds：从排序后的段落中获取除第一个外的所有ID
+          const sourceIds = selectedSegments.slice(1).map(s => s.id)
+
+          if (!currentProject) {
+            throw new Error('项目未初始化')
+          }
+
+          const mergedCfiRanges = selectedSegments.reduce<string[]>((acc, seg) => {
+            if (Array.isArray(seg.cfiRanges) && seg.cfiRanges.length > 0) {
+              acc.push(...seg.cfiRanges.filter((cfi): cfi is string => typeof cfi === 'string' && cfi.trim().length > 0))
+            }
+            return acc
+          }, [])
+
+          console.log('🔀 准备合并段落 CFI 列表:', {
+            targetSegment: {
+              id: targetSegment.id,
+              position: targetSegment.position
+            },
+            lastSegment: {
+              id: lastSegment.id,
+              position: lastSegment.position
+            },
+            mergedCfiCount: mergedCfiRanges.length
+          })
+
+          if (mergedCfiRanges.length === 0) {
+            console.warn('⚠️ 合并段落没有可用的 CFI，将以空列表保存', {
+              targetId: targetSegment.id,
+              sourceIds
+            })
+          }
+
+          // 获取合并后的文本长度
+          const textResult = await window.electronAPI.getSegmentText(
+            currentProject.id,
+            targetSegment.chapterHref,
+            targetSegment.xpath,
+            lastSegment.xpath
+          )
+
+          if (!textResult.success || !textResult.data) {
+            message.error('获取合并文本失败')
+            return
+          }
+
+          const textLength = textResult.data.text.length
+
+          // 添加到待合并列表（不立即提交）
+          addPendingMerge({
+            targetId: targetSegment.id,
+            sourceIds,
+            endXPath: lastSegment.xpath,
+            mergedCfiRanges,
+            textLength
+          })
+
+          message.success(`已标记合并${selectedSegments.length}个段落，点击"保存"生效`)
+
+          // 退出多选模式
+          setMultiSelectMode(false)
+
+          // 标记有未保存的更改
+          setHasUnsavedChanges(true)
+        } catch (error) {
+          message.error('合并操作失败：' + (error instanceof Error ? error.message : '未知错误'))
+          console.error('合并操作异常：', error)
+        } finally {
+          setIsMerging(false)
+        }
+      }
+    })
+  }
+
   const handleCardClick = (segment: typeof visibleSegments[0]) => {
     const targetRendition = rendition ?? lastRenditionRef.current
     if (!targetRendition) {
@@ -254,9 +409,14 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
       return
     }
 
-    const rawCFI = segment.cfiRange
-    const hasCFI = !!rawCFI
-    const isInvalidCFI = rawCFI ? rawCFI.includes('epubcfi(/!/') : false
+    const cfiCandidates = Array.isArray(segment.cfiRanges)
+      ? segment.cfiRanges.filter((cfi): cfi is string => typeof cfi === 'string' && cfi.trim().length > 0)
+      : []
+    const hasCFI = cfiCandidates.length > 0
+
+    const isInvalidCFI = cfiCandidates.length > 0
+      ? cfiCandidates[0].includes('epubcfi(/!/')
+      : false
 
     if (!hasCFI) {
       console.debug('handleCardClick: 缺少 CFI，跳过阅读区域跳转', {
@@ -272,17 +432,29 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
       return
     }
 
-    let cfi: string | null | undefined = rawCFI
+    const findValidCfi = (values: string[]) => values.find((value) =>
+      value.startsWith('epubcfi(') && !value.includes('epubcfi(/!/')
+    )
+
+    let cfi: string | null | undefined = findValidCfi(cfiCandidates)
 
     if (isInvalidCFI && segment.xpath) {
-      console.log('⚠️ CFI 无效，从 XPath 重新生成:', rawCFI)
+      console.log('⚠️ CFI 无效，从 XPath 重新生成:', cfiCandidates[0])
+      cfi = generateCFIFromXPath(segment.xpath, targetRendition)
+    }
+
+    if (!cfi && segment.xpath) {
+      console.log('⚠️ 未找到可用 CFI，尝试从 XPath 生成:', {
+        id: segment.id,
+        xpath: segment.xpath
+      })
       cfi = generateCFIFromXPath(segment.xpath, targetRendition)
     }
 
     if (!cfi) {
       console.error('❌ 无法跳转: 无法获取有效的 CFI', {
         id: segment.id,
-        cfiRange: segment.cfiRange,
+        cfiRanges: segment.cfiRanges,
         xpath: segment.xpath,
         isInvalid: isInvalidCFI
       })
@@ -318,7 +490,14 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
       // 等待 DOM 稳定后触发闪烁高亮
       setTimeout(() => {
         if (isJumpingRef.current) {
-          triggerFlashHighlight(segment)
+          // 从最新的 visibleSegments 中获取段落数据，确保使用最新的 CFI
+          const currentSegment = visibleSegments.find(s => s.id === segment.id) || segment
+          console.log('🔍 准备高亮段落:', {
+            id: currentSegment.id,
+            cfiRanges: currentSegment.cfiRanges,
+            isUpdated: currentSegment !== segment
+          })
+          triggerFlashHighlight(currentSegment)
         }
         cleanup()
       }, 100)
@@ -426,29 +605,95 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     )
   }
 
+  // 右键菜单
+  const menuItems = [
+    {
+      key: 'merge',
+      label: '合并选中的段落',
+      disabled: !validateMergeSelection().valid || isMerging,
+      onClick: handleMerge
+    }
+  ]
+
   // 显示段落列表
   return (
     <div className="h-full flex flex-col">
+      {/* 多选模式提示栏 */}
+      {isMultiSelectMode && (() => {
+        const validation = validateMergeSelection()
+        return (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-blue-700">
+                已选择 {selectedSegmentIds.size} 个附注
+              </span>
+              {!validation.valid && validation.reason && (
+                <span className="text-xs text-red-600">
+                  ⚠️ {validation.reason}
+                </span>
+              )}
+            </div>
+            <Space size="small">
+              <Button
+                size="small"
+                type="primary"
+                disabled={!validation.valid || isMerging}
+                loading={isMerging}
+                onClick={handleMerge}
+              >
+                合并
+              </Button>
+              <Button size="small" onClick={() => setMultiSelectMode(false)}>
+                取消
+              </Button>
+            </Space>
+          </div>
+        )
+      })()}
+
       {/* 分段列表 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto px-4 py-2">
-        <List
-          dataSource={visibleSegments}
-          renderItem={(segment, index) => (
-            <List.Item key={segment.id} className="!border-none !p-0">
-              <SegmentCard
-                segment={segment}
-                index={index}
-                isHovered={hoveredSegmentId === segment.id}
-                onMouseEnter={() => setHoveredSegment(segment.id)}
-                onMouseLeave={() => setHoveredSegment(null)}
-                onClick={() => handleCardClick(segment)}
-                onDelete={handleDelete}
-                showDelete={isEditMode}
-                isReadOnly={!isEditMode}
-              />
-            </List.Item>
-          )}
-        />
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto px-4 py-2"
+        onContextMenu={(e) => {
+          if (isMultiSelectMode && selectedSegmentIds.size > 0) {
+            e.preventDefault()
+            setContextMenuVisible(true)
+          }
+        }}
+      >
+        <Dropdown
+          menu={{ items: menuItems }}
+          trigger={['contextMenu']}
+          open={contextMenuVisible && isMultiSelectMode}
+          onOpenChange={setContextMenuVisible}
+        >
+          <List
+            dataSource={visibleSegments}
+            renderItem={(segment, index) => (
+              <List.Item key={segment.id} className="!border-none !p-0">
+                <SegmentCard
+                  segment={segment}
+                  index={index}
+                  isHovered={hoveredSegmentId === segment.id}
+                  onMouseEnter={() => setHoveredSegment(segment.id)}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                  onClick={() => handleCardClick(segment)}
+                  onDelete={handleDelete}
+                  showDelete={isEditMode && !isMultiSelectMode}
+                  isReadOnly={!isEditMode}
+                  isMultiSelectMode={isMultiSelectMode}
+                  isSelected={selectedSegmentIds.has(segment.id)}
+                  onLongPress={(id) => {
+                    setMultiSelectMode(true)
+                    toggleSegmentSelection(id)
+                  }}
+                  onSelect={toggleSegmentSelection}
+                />
+              </List.Item>
+            )}
+          />
+        </Dropdown>
       </div>
 
       {/* 底部操作按钮 */}
@@ -465,6 +710,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                   type="primary"
                   icon={<CheckOutlined />}
                   onClick={handleAccept}
+                  disabled={isMultiSelectMode}
                 >
                   接受
                 </Button>
@@ -472,6 +718,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                   icon={hasPersisted ? <RollbackOutlined /> : <CloseOutlined />}
                   onClick={hasPersisted ? handleCancel : handleDiscard}
                   danger={!hasPersisted}
+                  disabled={isMultiSelectMode}
                 >
                   取消
                 </Button>
@@ -483,18 +730,21 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                   type="primary"
                   icon={<CheckOutlined />}
                   onClick={handleAccept}
+                  disabled={isMultiSelectMode}
                 >
                   保存
                 </Button>
                 <Button
                   icon={<RollbackOutlined />}
                   onClick={handleCancel}
+                  disabled={isMultiSelectMode}
                 >
                   取消
                 </Button>
                 <Button
                   icon={<ScissorOutlined />}
                   onClick={handleResegment}
+                  disabled={isMultiSelectMode}
                 >
                   重新分割
                 </Button>
@@ -509,6 +759,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                   <Button
                     icon={<EditOutlined />}
                     onClick={handleEdit}
+                    disabled={isMultiSelectMode}
                   >
                     编辑
                   </Button>
@@ -516,6 +767,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                     danger
                     icon={<DeleteOutlined />}
                     onClick={handleClear}
+                    disabled={isMultiSelectMode}
                   >
                     清空
                   </Button>
@@ -526,6 +778,7 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
                   type="primary"
                   icon={<ScissorOutlined />}
                   onClick={handleSegment}
+                  disabled={isMultiSelectMode}
                 >
                   分割
                 </Button>

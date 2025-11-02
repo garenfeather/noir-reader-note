@@ -35,6 +35,7 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
     setLoading,
     setParsed,
     deletedSegmentIds,
+    pendingMerges,
     clearModifiedFlags,
     segmentScrollTop,
     saveScrollPosition: saveSegmentScrollPosition
@@ -65,8 +66,10 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
     const hasModifiedSegments = segments.some(s => s.isModified === true)
     // 检查是否有待删除的分段
     const hasDeletedSegments = deletedSegmentIds.length > 0
+    // 检查是否有待合并的段落
+    const hasPendingMerges = pendingMerges.length > 0
 
-    return hasModifiedSegments || hasDeletedSegments
+    return hasModifiedSegments || hasDeletedSegments || hasPendingMerges
   }
 
   // 移除 allowEditing 检查，编辑模式由底部按钮控制
@@ -112,8 +115,54 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
         console.log('✅ 已删除 ' + deletedSegmentIds.length + ' 个分段')
       }
 
-      // 2. 保存当前分段列表（清除 isModified 标记）
-      const segmentsToSave = segments.map(s => ({ ...s, isModified: false }))
+      // 2. 处理待合并的段落
+      if (pendingMerges.length > 0) {
+        console.log('🔀 开始处理待合并的段落:', pendingMerges.length, '个', pendingMerges)
+        for (const merge of pendingMerges) {
+          console.log('🔀 处理合并:', {
+            targetId: merge.targetId,
+            sourceIds: merge.sourceIds,
+            endXPath: merge.endXPath,
+            mergedCfiRanges: merge.mergedCfiRanges,
+            textLength: merge.textLength
+          })
+          try {
+            const mergeResult = await window.electronAPI.mergeSegments(
+              merge.targetId,
+              merge.sourceIds,
+              merge.endXPath,
+              merge.mergedCfiRanges,
+              merge.textLength
+            )
+            console.log('🔀 mergeSegments 返回:', mergeResult)
+            if (!mergeResult.success) {
+              console.warn('❌ 合并段落失败:', merge.targetId, mergeResult.error)
+              message.warning(`段落 ${merge.targetId} 合并失败: ${mergeResult.error}`)
+            } else {
+              console.log('✅ 成功合并段落:', merge.targetId, '数据:', mergeResult.data)
+            }
+          } catch (error) {
+            console.error('❌ 合并段落异常:', merge.targetId, error)
+            message.warning(`段落 ${merge.targetId} 合并异常`)
+          }
+        }
+        console.log('✅ 已处理 ' + pendingMerges.length + ' 个合并操作')
+      }
+
+      // 3. 保存当前分段列表（清除 isModified 标记）
+      // 注意：过滤掉已合并的段落，因为它们已经被 mergeSegments 直接处理了
+      const mergedTargetIds = new Set(pendingMerges.map(m => m.targetId))
+      const mergedSourceIds = new Set(pendingMerges.flatMap(m => m.sourceIds))
+
+      const segmentsToSave = segments
+        .filter(s => !mergedTargetIds.has(s.id) && !mergedSourceIds.has(s.id))
+        .map(s => ({ ...s, isModified: false }))
+
+      console.log('📤 准备保存段落:', {
+        totalSegments: segments.length,
+        toSave: segmentsToSave.length,
+        filteredOut: segments.length - segmentsToSave.length
+      })
       console.log('📤 调用 window.electronAPI.saveSegments...')
       const result = await window.electronAPI.saveSegments(
         currentProject.id,
@@ -141,6 +190,15 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
           console.log('📥 loadSegments 返回:', loadResult)
 
           if (loadResult.success && loadResult.data) {
+            console.log('📥 重新加载的段落数据:', {
+              count: loadResult.data.length,
+              samples: loadResult.data.slice(0, 3).map(s => ({
+                id: s.id,
+                position: s.position,
+                cfiRanges: s.cfiRanges,
+                endXPath: s.endXPath
+              }))
+            })
             setSegments(loadResult.data)
             console.log('✅ 已更新 segments，CFI 数据已加载')
           }
@@ -182,6 +240,8 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
       if (result.success && result.data) {
         setSegments(result.data)
         setParsed(result.data.length > 0)
+        // 清空所有未保存的修改（包括待删除、待合并）
+        clearModifiedFlags()
         setHasUnsavedChanges(false)
         message.info('已恢复到保存的状态')
         console.log('✅ 已恢复到持久化状态')

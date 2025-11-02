@@ -17,7 +17,8 @@ export interface Segment {
   chapterId: string             // 章节ID (spine item id)
   chapterHref: string           // 章节文件路径
   xpath: string                 // XPath路径（用于从XHTML动态读取文本内容）
-  cfiRange?: string             // CFI范围（用于定位和高亮）
+  endXPath?: string | null      // 合并段落的结束XPath（普通段落为null）
+  cfiRanges?: string[] | null   // CFI范围列表（用于定位和高亮）
   position: number              // 在章节中的顺序
   isEmpty: boolean              // 是否为空段落
   parentSegmentId?: string      // 手动分割的父分段ID
