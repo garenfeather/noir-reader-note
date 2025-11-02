@@ -85,7 +85,6 @@ interface SegmentState {
   saveScrollPosition: (scrollTop: number) => void
   setMultiSelectMode: (enabled: boolean) => void
   toggleSegmentSelection: (segmentId: string) => void
-  clearSelection: () => void
 }
 
 export const useSegmentStore = create<SegmentState>((set, get) => ({
@@ -238,9 +237,5 @@ export const useSegmentStore = create<SegmentState>((set, get) => ({
       selected.add(segmentId)
     }
     set({ selectedSegmentIds: selected })
-  },
-
-  clearSelection: () => {
-    set({ selectedSegmentIds: new Set() })
   }
 }))

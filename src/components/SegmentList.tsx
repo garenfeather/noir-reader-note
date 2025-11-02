@@ -46,15 +46,13 @@ function SegmentList({ onAccept, onDiscard, onCancel, onResegment, onSegment, al
     setSelectedSegment,
     setEditMode,
     setEditSource,
-    setSegments,
     markSegmentDeleted,
     addPendingMerge,
     clearSegments,
     setParsed,
     removeChapterWithSegments,
     setMultiSelectMode,
-    toggleSegmentSelection,
-    clearSelection
+    toggleSegmentSelection
   } = useSegmentStore()
 
   const [contextMenuVisible, setContextMenuVisible] = useState(false)

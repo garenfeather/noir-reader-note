@@ -3,12 +3,11 @@
  * 完全只读，显示章节、原文、译文、附注
  */
 
-import { Button, Spin, Card, Space, message } from 'antd'
+import { Button, Spin, Card, message } from 'antd'
 import { ArrowLeftOutlined, FolderOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Bookmark } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
-import { useBookmarkStore } from '../store/bookmarkStore'
 import { useBookStore } from '../store/bookStore'
 
 interface Props {

@@ -12,13 +12,12 @@ const { TextArea } = Input
 
 interface Props {
   note: Note
-  index: number
   onUpdate: (noteId: string, newText: string) => void
   onDelete: (noteId: string) => void
   allowEdit?: boolean
 }
 
-function NoteItem({ note, index, onUpdate, onDelete, allowEdit = true }: Props) {
+function NoteItem({ note, onUpdate, onDelete, allowEdit = true }: Props) {
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState(note.text)
 

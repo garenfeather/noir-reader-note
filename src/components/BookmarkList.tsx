@@ -3,11 +3,10 @@
  * 按章节分组显示书签
  */
 
-import { List, Spin, Empty, Button } from 'antd'
+import { Spin, Empty, Button } from 'antd'
 import { DeleteOutlined, FolderOutlined } from '@ant-design/icons'
 import { useEffect, useRef, useState } from 'react'
 import { useBookmarkStore } from '../store/bookmarkStore'
-import { useSegmentStore } from '../store/segmentStore'
 import { useBookStore } from '../store/bookStore'
 import { Bookmark } from '../types/segment'
 

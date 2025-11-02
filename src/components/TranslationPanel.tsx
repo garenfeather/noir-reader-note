@@ -3,13 +3,12 @@
  * 显示分段结果和编辑功能，支持附注/书签视图切换
  */
 
-import { Empty, message, Dropdown, MenuProps } from 'antd'
+import { message, Dropdown, MenuProps } from 'antd'
 import { DownOutlined } from '@ant-design/icons'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import { useSegmentStore } from '../store/segmentStore'
 import { useBookmarkStore } from '../store/bookmarkStore'
-import { useBookStore } from '../store/bookStore'
 import SegmentList from './SegmentList'
 import BookmarkList from './BookmarkList'
 import BookmarkDetail from './BookmarkDetail'
@@ -25,10 +24,8 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
   const { currentProject, setHasUnsavedChanges } = useProjectStore()
   const {
     segments,
-    isParsed,
     clearSegments,
     addChapterWithSegments,
-    isEditMode,
     setEditMode,
     chaptersWithSegments,
     setSegments,
@@ -36,25 +33,20 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
     setParsed,
     deletedSegmentIds,
     pendingMerges,
-    clearModifiedFlags,
-    segmentScrollTop,
-    saveScrollPosition: saveSegmentScrollPosition
+    clearModifiedFlags
   } = useSegmentStore()
 
   const {
     bookmarks,
     selectedBookmarkId,
-    selectBookmark,
-    bookmarkScrollTop,
-    saveScrollPosition: saveBookmarkScrollPosition
+    selectBookmark
   } = useBookmarkStore()
 
-  const { jumpToCfi } = useBookStore()
 
   // 视图模式状态
   const [viewMode, setViewMode] = useState<ViewMode>('segments')
 
-  // 始终允许操作，通过 isEditMode 控制编辑/只读
+  // 始终允许操作，具体编辑/只读由底部按钮控制
   const allowEditing = true
 
   // 判断当前章节是否有持久化结果

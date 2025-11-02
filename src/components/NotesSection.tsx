@@ -84,11 +84,10 @@ function NotesSection({ notes, onNotesChange, allowEdit = true, externalAddTrigg
 
       <div className="space-y-2">
         {/* 现有附注列表 */}
-        {notes?.map((note, index) => (
+        {notes?.map((note) => (
           <NoteItem
             key={note.id}
             note={note}
-            index={index}
             onUpdate={handleUpdateNote}
             onDelete={handleDeleteNote}
             allowEdit={allowEdit}

@@ -49,7 +49,7 @@ function SegmentCard({
     }
   }
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = () => {
     // 如果已经处于多选模式，不需要长按
     if (isMultiSelectMode) return
 
