@@ -107,7 +107,35 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
         console.log('✅ 已删除 ' + deletedSegmentIds.length + ' 个分段')
       }
 
-      // 2. 处理待合并的段落
+      // 2. 先保存所有段落到数据库（确保合并操作能找到目标段落）
+      // 如果有待合并操作，需要先保存所有段落（包括即将合并的段落）
+      let segmentsToSave
+      if (pendingMerges.length > 0) {
+        // 有待合并操作，先保存所有段落
+        console.log('📤 有待合并操作，先保存所有段落到数据库...')
+        segmentsToSave = segments.map(s => ({ ...s, isModified: false }))
+      } else {
+        // 没有待合并操作，正常保存
+        segmentsToSave = segments.map(s => ({ ...s, isModified: false }))
+      }
+
+      console.log('📤 准备保存段落:', {
+        totalSegments: segments.length,
+        toSave: segmentsToSave.length
+      })
+      console.log('📤 调用 window.electronAPI.saveSegments...')
+      const result = await window.electronAPI.saveSegments(
+        currentProject.id,
+        segmentsToSave
+      )
+      console.log('📥 saveSegments 返回结果:', result)
+
+      if (!result.success) {
+        message.error('保存失败: ' + result.error)
+        return
+      }
+
+      // 3. 执行待合并的段落（此时目标段落已经在数据库中）
       if (pendingMerges.length > 0) {
         console.log('🔀 开始处理待合并的段落:', pendingMerges.length, '个', pendingMerges)
         for (const merge of pendingMerges) {
@@ -141,27 +169,7 @@ function TranslationPanel({ currentChapterId, currentChapterHref }: Props) {
         console.log('✅ 已处理 ' + pendingMerges.length + ' 个合并操作')
       }
 
-      // 3. 保存当前分段列表（清除 isModified 标记）
-      // 注意：过滤掉已合并的段落，因为它们已经被 mergeSegments 直接处理了
-      const mergedTargetIds = new Set(pendingMerges.map(m => m.targetId))
-      const mergedSourceIds = new Set(pendingMerges.flatMap(m => m.sourceIds))
-
-      const segmentsToSave = segments
-        .filter(s => !mergedTargetIds.has(s.id) && !mergedSourceIds.has(s.id))
-        .map(s => ({ ...s, isModified: false }))
-
-      console.log('📤 准备保存段落:', {
-        totalSegments: segments.length,
-        toSave: segmentsToSave.length,
-        filteredOut: segments.length - segmentsToSave.length
-      })
-      console.log('📤 调用 window.electronAPI.saveSegments...')
-      const result = await window.electronAPI.saveSegments(
-        currentProject.id,
-        segmentsToSave
-      )
-      console.log('📥 saveSegments 返回结果:', result)
-
+      // 4. 处理完合并后的最终状态
       if (result.success) {
         message.success(`已保存 ${segments.length} 个分段`)
         setHasUnsavedChanges(false)

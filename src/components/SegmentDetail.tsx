@@ -13,6 +13,7 @@ import { useBookStore } from '../store/bookStore'
 import TranslationSection from './TranslationSection'
 import NotesSection from './NotesSection'
 import BookmarkButton from './BookmarkButton'
+import { originalTextStyles } from '../styles/contentStyles'
 
 interface Props {
   segment: Segment
@@ -213,7 +214,7 @@ function SegmentDetail({ segment, index, onBack, allowEdit = true }: Props) {
               </h4>
             </div>
             <div
-              className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap p-3 bg-gray-50 rounded border border-gray-200 cursor-pointer transition-all hover:border-blue-500 hover:shadow-md"
+              className={originalTextStyles}
               onClick={handleOriginalTextClick}
             >
               {text}

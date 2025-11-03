@@ -305,6 +305,11 @@ ipcMain.handle('segments:parse', async (event, projectId, chapterId, chapterHref
     // 解析段落
     const result = segmentService.parseXhtml(xhtmlPath, chapterId, chapterHref, projectId)
 
+    // 🔧 在分割时立即生成CFI，确保第一次分割时就有CFI信息
+    console.log('🔧 分割时生成CFI...')
+    dbService.generateCFIForSegments(projectId, result.segments)
+    console.log('✅ CFI生成完成')
+
     // 清除该项目的缓存
     cacheService.clearProjectCache(projectId)
     console.log('分割时已清除项目缓存:', projectId)

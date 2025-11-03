@@ -3,12 +3,13 @@
  * 完全只读，显示章节、原文、译文、附注
  */
 
-import { Button, Spin, Card, message } from 'antd'
+import { Button, Spin, message } from 'antd'
 import { ArrowLeftOutlined, FolderOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { Bookmark } from '../types/segment'
 import { useProjectStore } from '../store/projectStore'
 import { useBookStore } from '../store/bookStore'
+import { originalTextStyles, translationTextStyles, noteItemStyles, noteContentStyles } from '../styles/contentStyles'
 
 interface Props {
   bookmark: Bookmark
@@ -97,56 +98,50 @@ function BookmarkDetail({ bookmark, onBack }: Props) {
           </div>
 
           {/* 原文 - 可点击跳转 */}
-          <Card
-            title="原文"
-            size="small"
-            className="bg-gray-50 cursor-pointer transition-all hover:border-blue-500 hover:shadow-md"
-            onClick={handleOriginalTextClick}
-          >
+          <div className="mb-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">
+              原文{text.length > 0 ? `（字符数 ${text.length}）` : ''}
+            </h4>
             {isLoading ? (
               <div className="text-center py-4">
                 <Spin />
               </div>
             ) : (
-              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+              <div
+                className={originalTextStyles}
+                onClick={handleOriginalTextClick}
+              >
                 {text || '（无内容）'}
               </div>
             )}
-          </Card>
+          </div>
 
           {/* 译文 */}
           {segment.translatedText && (
-            <Card
-              title="译文"
-              size="small"
-              className="bg-blue-50"
-            >
-              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">译文</h4>
+              <div className={translationTextStyles}>
                 {segment.translatedText}
               </div>
-            </Card>
+            </div>
           )}
 
           {/* 附注 */}
           {segment.notes && segment.notes.length > 0 && (
-            <Card
-              title="附注"
-              size="small"
-              className="bg-yellow-50"
-            >
-              <div className="space-y-3">
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                附注 ({segment.notes.length})
+              </h4>
+              <div className="space-y-2">
                 {segment.notes.map((note) => (
-                  <div key={note.id} className="border-l-2 border-yellow-400 pl-3">
-                    <div className="text-gray-800">
+                  <div key={note.id} className={noteItemStyles}>
+                    <div className={noteContentStyles}>
                       {note.text}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      {new Date(note.timestamp).toLocaleString('zh-CN')}
                     </div>
                   </div>
                 ))}
               </div>
-            </Card>
+            </div>
           )}
         </div>
       </div>

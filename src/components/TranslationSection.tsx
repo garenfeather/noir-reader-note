@@ -6,6 +6,7 @@
 import { Input, Button } from 'antd'
 import { EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
+import { translationTextStyles } from '../styles/contentStyles'
 
 const { TextArea } = Input
 
@@ -76,7 +77,7 @@ function TranslationSection({ translatedText, onChange, allowEdit = true }: Prop
           </div>
         </div>
       ) : (
-        <div className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap p-3 bg-gray-50 rounded border border-gray-200">
+        <div className={translationTextStyles}>
           {translatedText}
         </div>
       )}

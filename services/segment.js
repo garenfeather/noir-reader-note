@@ -69,7 +69,7 @@ class SegmentService {
           chapterId: chapterId,
           chapterHref: chapterHref,
           xpath: para.xpath,
-          cfiRanges: [],   // CFI将在渲染进程中生成（前端生成并回写）
+          cfiRanges: [],   // CFI将在主进程的parseSegments IPC handler中生成
           position: index,
           isEmpty: para.isEmpty,
           parentSegmentId: null,

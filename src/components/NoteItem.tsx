@@ -7,6 +7,7 @@ import { Button, Input } from 'antd'
 import { DeleteOutlined, EditOutlined, CloseOutlined, CheckOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { Note } from '../types/segment'
+import { noteItemStyles, noteContentStyles } from '../styles/contentStyles'
 
 const { TextArea } = Input
 
@@ -34,7 +35,7 @@ function NoteItem({ note, onUpdate, onDelete, allowEdit = true }: Props) {
   }
 
   return (
-    <div className="p-3 bg-gray-50 rounded border border-gray-200">
+    <div className={noteItemStyles}>
       <div className="flex items-start gap-2">
         {isEditing ? (
           <div className="flex-1">
@@ -60,7 +61,7 @@ function NoteItem({ note, onUpdate, onDelete, allowEdit = true }: Props) {
           </div>
         ) : (
           <>
-            <div className="flex-1 text-base text-gray-800 leading-relaxed whitespace-pre-wrap">{note.text}</div>
+            <div className={`flex-1 ${noteContentStyles}`}>{note.text}</div>
             {allowEdit && (
               <div className="flex gap-1">
                 <Button
